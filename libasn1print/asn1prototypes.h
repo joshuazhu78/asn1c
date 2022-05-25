@@ -53,6 +53,11 @@ typedef struct proto_tags_s {
 	int valueLB;
 	int valueUB;
     int repeated;
+    int choiceExt;
+    int fromChoiceExt;
+    int fromValueExt;
+    int canonicalOrder;
+    int unique;
 } proto_tags_t;
 
 typedef struct proto_msg_def_s {

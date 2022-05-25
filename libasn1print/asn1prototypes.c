@@ -190,9 +190,47 @@ proto_create_import(const char *path, asn1p_oid_t *oid) {
 	return protoimport;
 }
 
+// tags_sum function returns sum of the tags. It is later used in the if condition statement to check, if the tags are
+// not empty. If the sum is non-zero, tags are printed. If the sum is zero, tags are not printed.
 int
 tags_sum(proto_tags_t tags) {
-	// Expecting sizeLB and valueLB to have been set to -1
-	return tags.optional + tags.sizeExt + tags.sizeLB + 1 + tags.sizeUB + tags.valueExt +
-			tags.valueLB + 1 + tags.valueUB + tags.repeated;
+
+    // avoiding the case when tags for sizeLB, sizeUB, valueLB and valueUB are not set (both are == -1).
+    // rest of tags are binary values (either 0, or 1)
+
+    // it doesn't let the case when the actual sizeLB = -1 and sizeUB > sizeLB to go through
+    int sizeLB = 0;
+    if (tags.sizeLB == -1 && tags.sizeUB == tags.sizeLB) {
+        sizeLB = 0;
+    } else {
+        sizeLB = tags.sizeLB;
+    }
+
+    // it doesn't let the case when the actual sizeUB = -1 and sizeUB > sizeLB to go through
+    int sizeUB = 0;
+    if (tags.sizeUB == -1 && tags.sizeUB == tags.sizeLB) {
+        sizeUB = 0;
+    } else {
+        sizeUB = tags.sizeUB;
+    }
+
+    // it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
+    int valueLB = 0;
+    if (tags.valueLB == -1 && tags.valueLB == tags.valueUB) {
+        valueLB = 0;
+    } else {
+        valueLB = tags.valueLB;
+    }
+
+    // it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
+    int valueUB = 0;
+    if (tags.valueUB == -1 && tags.valueLB == tags.valueUB) {
+        valueUB = 0;
+    } else {
+        valueUB = tags.valueUB;
+    }
+
+	return tags.optional + tags.sizeExt + sizeLB + sizeUB + tags.valueExt +
+           valueLB + valueUB + tags.repeated + tags.choiceExt + tags.fromChoiceExt +
+           tags.fromValueExt + tags.canonicalOrder + tags.unique;
 }

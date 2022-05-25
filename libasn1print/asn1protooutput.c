@@ -168,7 +168,24 @@ toSnakeCaseDup(const char *mixedCase, const snake_case_e tocase) {
 	}
 	snakeCase[i+added] = '\0';
 
-	return snakeCase;
+    // ToDo - not confident about the solution. i is greater than j and may exceed char array bounds. Test it out.
+    // Exclude duplicate underscores from the string.
+    int j = 0;
+    i = 0;
+    char *noDuplicatesSnakeCase = strdup(snakeCase);
+    while (snakeCase[j] != '\0') {
+        if (snakeCase[i] == '_' && snakeCase[i+1] == '_') {
+            noDuplicatesSnakeCase[j] = snakeCase[i + 1];
+            i++;
+        } else {
+            noDuplicatesSnakeCase[j] = snakeCase[i];
+        }
+        i++;
+        j++;
+    }
+
+    return noDuplicatesSnakeCase;
+//	return snakeCase;
 }
 
 static int
@@ -223,12 +240,21 @@ proto_print_oid(asn1p_oid_t *oid) {
 
 static void
 print_entries(proto_msg_def_t **entry, size_t entries,
-              enum asn1print_flags2 flags, int level, int andfree) {
+              enum asn1print_flags2 flags, int level, int andfree, int oneof) {
     for (int i=0; i < (int)(entries); i++) {
         struct proto_msg_def_s *proto_msg_def  = entry[i];
-        if (tags_sum(proto_msg_def->tags)) {
+        // if we have non-zero sum of tags, it means that we have tags to print.
+        // If the sum is 0, then there is no tags to print.
+        // In case of CHOICE (OneOf) structure, this condition doesn't apply. For that case we've set up a special flag
+        if (tags_sum(proto_msg_def->tags) || oneof) {
 			INDENT("// @inject_tag: aper:\"");
-			if (proto_msg_def->tags.optional) {
+            if (oneof == 1 && proto_msg_def->tags.canonicalOrder != TRUE) {
+                safe_printf("choiceIdx:%d,", i+1);
+                if (proto_msg_def->tags.fromChoiceExt == TRUE) {
+                    safe_printf("fromChoiceExt,");
+                }
+            }
+			if (proto_msg_def->tags.optional == TRUE) {
 				safe_printf("optional,");
 			}
 			if (proto_msg_def->tags.valueExt == TRUE) {
@@ -249,6 +275,18 @@ print_entries(proto_msg_def_t **entry, size_t entries,
 			if (proto_msg_def->tags.sizeUB > 0) {
 				safe_printf("sizeUB:%d,", proto_msg_def->tags.sizeUB);
 			}
+            if (proto_msg_def->tags.choiceExt == TRUE) {
+                safe_printf("choiceExt,");
+            }
+            if (proto_msg_def->tags.fromValueExt == TRUE) {
+                safe_printf("fromValueExt,");
+            }
+            if (proto_msg_def->tags.canonicalOrder == TRUE) {
+                safe_printf("canonicalOrder,");
+            }
+            if (proto_msg_def->tags.unique == TRUE) {
+                safe_printf("unique,");
+            }
 			safe_printf("\"\n");
         }
         INDENT("");
@@ -295,7 +333,7 @@ proto_print_single_oneof(proto_msg_oneof_t *proto_oneof,
     }
     INDENT("oneof %s {\n", toSnakeCaseDup(proto_oneof->name, SNAKECASE_LOWER));
     level++;
-    print_entries(proto_oneof->entry, proto_oneof->entries, flags, level, andfree);
+    print_entries(proto_oneof->entry, proto_oneof->entries, flags, level, andfree, 1);
     level--;
     INDENT("}\n");
 }
@@ -386,7 +424,7 @@ proto_print_single_msg(proto_msg_t *proto_msg,
 		}
 	}
 
-    print_entries(proto_msg->entry, proto_msg->entries, flags, level, 0);
+    print_entries(proto_msg->entry, proto_msg->entries, flags, level, 0, 0);
     for (int i = 0; i < (int)(proto_msg->oneofs); i++) {
         struct proto_msg_oneof_s *proto_oneof  = proto_msg->oneof[i];
         proto_print_single_oneof(proto_oneof, flags, level, 0);

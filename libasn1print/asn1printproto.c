@@ -219,6 +219,8 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			sprintf(msgelem->rules, "int32.const = %d", (int)expr->value->value.v_integer);
 			msgelem->tags.valueLB = (int)expr->value->value.v_integer;
 			msgelem->tags.valueUB = (int)expr->value->value.v_integer;
+            // this should add a non-zero value to the unique tag (used in E2AP)
+            msgelem->tags.unique = (int)expr->unique;
 			proto_msg_add_elem(msg, msgelem);
 			proto_messages_add_msg(message, messages, msg);
 
@@ -295,6 +297,9 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		char *constraints = proto_constraint_print(expr->constraints, flags);
 		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
 		free(constraints);
+        // Adding APER tags to the INTEGER
+//        msgelem->tags.valueLB = expr->constraints;
+//        msgelem->tags.valueUB = expr->constraints;
 		proto_msg_add_elem(msg, msgelem);
 		proto_messages_add_msg(message, messages, msg);
 
