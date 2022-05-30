@@ -423,9 +423,6 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		char *constraints = proto_constraint_print(expr->constraints, flags);
 		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
 		free(constraints);
-		// Adding APER tags to the INTEGER
-//        msgelem->tags.valueLB = expr->constraints;
-//        msgelem->tags.valueUB = expr->constraints;
 		proto_msg_add_elem(msg, msgelem);
 		proto_messages_add_msg(message, messages, msg);
 
@@ -495,6 +492,73 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				proto_msg_add_elem(msg, msgelem);
 				proto_messages_add_msg(message, messages, msg);
 				return 0;
+            case ASN_BASIC_BIT_STRING:
+                strcpy(msgelem->type, "asn1.v1.BitString");
+                if (expr->constraints != NULL) {
+                    // adding APER tags
+                    long lowerbound;
+                    lowerbound = get_lowerbound(expr->constraints);
+                    if (lowerbound != -1) {
+                        msgelem->tags.sizeLB = lowerbound;
+                    }
+                    // obtaining upperbound
+                    long upperbound;
+                    upperbound = get_upperbound(expr->constraints);
+                    if (upperbound != -1) {
+                        msgelem->tags.sizeUB = upperbound;
+                    }
+                }
+                proto_msg_add_elem(msg, msgelem);
+                proto_messages_add_msg(message, messages, msg);
+                return 0;
+            case ASN_BASIC_OCTET_STRING:
+                strcpy(msgelem->type, "bytes");
+                // adding constraints
+                if (expr->constraints != NULL) {
+                    // adding APER tags
+                    long lowerbound;
+                    lowerbound = get_lowerbound(expr->constraints);
+                    if (lowerbound != -1) {
+                        msgelem->tags.sizeLB = lowerbound;
+                    }
+                    // obtaining upperbound
+                    long upperbound;
+                    upperbound = get_upperbound(expr->constraints);
+                    if (upperbound != -1) {
+                        msgelem->tags.sizeUB = upperbound;
+                    }
+                    char *constraint = proto_constraint_print(expr->constraints, APF_REPEATED_VALUE);
+                    sprintf(msgelem->rules, "bytes.len = %s", constraint);
+                    free(constraint);
+                }
+
+                proto_msg_add_elem(msg, msgelem);
+                proto_messages_add_msg(message, messages, msg);
+                return 0;
+            case ASN_STRING_PrintableString:
+                strcpy(msgelem->type, "string");
+                // adding constraints
+                if (expr->constraints != NULL) {
+                    // adding APER tags
+                    long lowerbound;
+                    lowerbound = get_lowerbound(expr->constraints);
+                    if (lowerbound != -1) {
+                        msgelem->tags.sizeLB = lowerbound;
+                    }
+                    // obtaining upperbound
+                    long upperbound;
+                    upperbound = get_upperbound(expr->constraints);
+                    if (upperbound != -1) {
+                        msgelem->tags.sizeUB = upperbound;
+                    }
+                    char *constraint = proto_constraint_print(expr->constraints, APF_STRING_VALUE);
+                    sprintf(msgelem->rules, "string = {%s}", constraint);
+                    free(constraint);
+                }
+
+                proto_msg_add_elem(msg, msgelem);
+                proto_messages_add_msg(message, messages, msg);
+                return 0;
 			default:
 				// by default storing tags for sizeLB and sizeUB
 				if (expr->constraints != NULL) {
@@ -511,6 +575,13 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 						msgelem->tags.sizeUB = upperbound;
 					}
 				}
+                // adding message elements to the message itself
+                proto_msg_add_elem(msg, msgelem);
+                // adding message to the Protobuf tree
+                proto_messages_add_msg(message, messages, msg);
+
+                // to indicate that we've hit something unexpected
+                fprintf(stderr, "unhandled expr_type: %d and meta_type: %d\n", expr->expr_type, expr->meta_type);
 				return 0;
 		}
 		return 0;
@@ -615,6 +686,10 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 			proto_msg_def_t *elem = proto_create_msg_elem(se->Identifier, "int32", NULL);
 			elem->tags.repeated = repeated;
 			elem->marker = se->marker.flags;
+            // checking if the structure is optional and adding a tag if it is
+            if (elem->marker == EM_OPTIONAL) {
+                elem->tags.optional = 1;
+            }
 			if (se->expr_type == ASN_BASIC_BIT_STRING) {
 				strcpy(elem->type, "asn1.v1.BitString");
 			} else if (se->expr_type == ASN_BASIC_OBJECT_IDENTIFIER) {
@@ -732,6 +807,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 				// fprintf(stderr, "Unexpected type %d %d\n", se->expr_type, se->meta_type);
 			}
 			if (se->expr_type == A1TC_EXTENSIBLE) {
+                // ToDo - here is a placeholder for sizeExt and valueExt tags
 				extensible = 1;
 				continue;
 			} else if (se->expr_type == A1TC_REFERENCE) {

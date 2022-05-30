@@ -13,8 +13,29 @@ import "asn1/v1/asn1.proto";
 // sequence from 00a-aper-tags-OK.asn1:15
 // {Some-List}
 message SomeList {
-    // @inject_tag: aper:"sizeLB:1,sizeUB:123456,"
+    // @inject_tag: aper:"optional,sizeLB:1,sizeUB:123456,"
     repeated ConstrainedString element_list = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 123456}, json_name="element-List"];
+};
+
+// range of Integer from 00a-aper-tags-OK.asn1:19
+// {Some-ID}
+message SomeId {
+    // @inject_tag: aper:"sizeLB:22,sizeUB:32,"
+    asn1.v1.BitString value = 1 [ json_name="value"];
+};
+
+// range of Integer from 00a-aper-tags-OK.asn1:21
+// {Some-Identity}
+message SomeIdentity {
+    // @inject_tag: aper:"sizeLB:4,sizeUB:4,"
+    bytes value = 1 [(validate.v1.rules).bytes.len = 4, json_name="value"];
+};
+
+// range of Integer from 00a-aper-tags-OK.asn1:23
+// {ConstrainedString}
+message ConstrainedString {
+    // @inject_tag: aper:"sizeLB:1,sizeUB:150,"
+    string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="value"];
 };
 
 // constant Integer from 00a-aper-tags-OK.asn1:25
@@ -37,3 +58,4 @@ message LongerInterval {
     // @inject_tag: aper:"valueLB:-55,valueUB:68719476735,"
     int32 value = 1 [(validate.v1.rules).int32 = {gte: -55, lte: 68719476735}, json_name="value"];
 };
+
