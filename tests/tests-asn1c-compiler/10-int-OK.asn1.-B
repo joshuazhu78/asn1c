@@ -1,3 +1,9 @@
+/*
+SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+
+SPDX-License-Identifier: Apache-2.0
+*/
+
 ////////////////////// moduletestint4.proto //////////////////////
 // Protobuf generated from /10-int-OK.asn1 by asn1c-0.9.29
 // ModuleTestInt4 { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 10 }
@@ -54,4 +60,3 @@ message CheckDelta {
     // @inject_tag: aper:"valueLB:3,valueUB:3,"
     int32 value = 1 [(validate.v1.rules).int32.const = 3, json_name="value"];
 };
-

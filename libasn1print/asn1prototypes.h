@@ -47,11 +47,11 @@ typedef struct proto_param_s {
 typedef struct proto_tags_s {
 	int optional;
 	int sizeExt;
-	int sizeLB;
-	int sizeUB;
+	long sizeLB;
+	long sizeUB;
 	int valueExt;
-	int valueLB;
-	int valueUB;
+	long valueLB;
+	long valueUB;
     int repeated;
     int choiceExt;
     int fromChoiceExt;
@@ -140,6 +140,6 @@ void proto_messages_add_msg(proto_msg_t **messages, size_t *message_count, proto
 proto_import_t *proto_create_import(const char *path, asn1p_oid_t *oid);
 char *proto_remove_rel_path(char *path);
 char *proto_remove_whole_path(char *path);
-int tags_sum(proto_tags_t tags);
+long tags_sum(proto_tags_t tags);
 
 #endif /* LIBASN1PRINT_ASN1PROTOTYPES_H_ */

@@ -1,43 +1,43 @@
 ////////////////////// moduletestint1.proto //////////////////////
-// Protobuf generated from /07-int-OK.asn1 by asn1c-0.9.29
+// Protobuf generated from /07a-int-OK.asn1 by asn1c-0.9.29
 // ModuleTestInt1 { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 7 }
 
 syntax = "proto3";
 
-package pkg07_int_ok_asn1.v1;
-option go_package = "pkg07_int_ok_asn1/v1/moduletestint1";
+package pkg07a_int_ok_asn1.v1;
+option go_package = "pkg07a_int_ok_asn1/v1/moduletestint1";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
-// constant Integer from 07-int-OK.asn1:14
+// constant Integer from 07a-int-OK.asn1:14
 // {-}
 message Int123456 {
     // @inject_tag: aper:"valueLB:123456,valueUB:123456,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123456, json_name="value"];
 };
 
-// range of Integer from 07-int-OK.asn1:16
+// range of Integer from 07a-int-OK.asn1:16
 // {Interval}
 message Interval {
     // @inject_tag: aper:"valueLB:-100,valueUB:123456,"
     int32 value = 1 [(validate.v1.rules).int32 = {gte: -100, lte: 123456}, json_name="value"];
 };
 
-// range of Integer from 07-int-OK.asn1:18
+// range of Integer from 07a-int-OK.asn1:18
 // {LongerInterval}
 message LongerInterval {
     // @inject_tag: aper:"valueLB:1,valueUB:68719476735,"
     int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 68719476735}, json_name="value"];
 };
 
-// range of Integer from 07-int-OK.asn1:20
+// range of Integer from 07a-int-OK.asn1:20
 // {SameInterval}
 message SameInterval {
     int32 value = 1 [(validate.v1.rules).int32 = {in: [1,2,3,4,5,6]}, json_name="value"];
 };
 
-// range of Integer from 07-int-OK.asn1:23
+// range of Integer from 07a-int-OK.asn1:23
 // {Reason}
 message Reason {
     int32 value = 1 [ json_name="value"];

@@ -26,7 +26,7 @@ proto_remove_rel_path(char *path) {
 	char *newStart = path;
 	while (strstr(newStart, "../") != NULL) {
 		if (strcmp(newStart, strstr(newStart, "../")) == 0) {
-			newStart = newStart+3;
+			newStart = newStart + 3;
 			count++;
 		}
 	}
@@ -57,7 +57,7 @@ proto_create_enum(const char *name, const char *comment_fmt, char *src, const in
 }
 
 proto_enum_def_t *
-proto_create_enum_def(const char* name, const int index, const char *comment) {
+proto_create_enum_def(const char *name, const int index, const char *comment) {
 	proto_enum_def_t *enumdef = malloc(sizeof(proto_enum_def_t));
 	memset(enumdef, 0, sizeof(proto_enum_def_t));
 	strcpy(enumdef->name, name);
@@ -71,7 +71,7 @@ proto_create_enum_def(const char* name, const int index, const char *comment) {
 void
 proto_enum_add_def(proto_enum_t *protoenum, proto_enum_def_t *def) {
 	size_t existing_defs = protoenum->defs;
-	protoenum->def = realloc(protoenum->def, (existing_defs + 1)*sizeof(proto_enum_def_t *));
+	protoenum->def = realloc(protoenum->def, (existing_defs + 1) * sizeof(proto_enum_def_t *));
 	protoenum->def[existing_defs] = def;
 	protoenum->defs = existing_defs + 1;
 }
@@ -79,26 +79,27 @@ proto_enum_add_def(proto_enum_t *protoenum, proto_enum_def_t *def) {
 void
 proto_enums_add_enum(proto_enum_t **protoenums, size_t *enums_count, proto_enum_t *protoenum) {
 	size_t existing_count = *enums_count;
-	protoenums = realloc(protoenums, (existing_count + 1)*sizeof(proto_enum_t *));
+	protoenums = realloc(protoenums, (existing_count + 1) * sizeof(proto_enum_t *));
 	protoenums[existing_count] = protoenum;
 	*enums_count = existing_count + 1;
 }
 
 proto_msg_oneof_t *
 proto_create_msg_oneof(const char *name, const char *comment_fmt, char *src, const int line) {
-    proto_msg_oneof_t *msg = malloc(sizeof(proto_msg_oneof_t));
-    memset(msg, 0, sizeof(proto_msg_oneof_t));
-    strcpy(msg->name, name);
-    if (comment_fmt != NULL) {
-        sprintf(msg->comments, comment_fmt, proto_remove_whole_path(src), line);
-    }
-    msg->entry = calloc(0, sizeof(proto_msg_def_t *));
-    msg->entries = 0;
-    return msg;
+	proto_msg_oneof_t *msg = malloc(sizeof(proto_msg_oneof_t));
+	memset(msg, 0, sizeof(proto_msg_oneof_t));
+	strcpy(msg->name, name);
+	if (comment_fmt != NULL) {
+		sprintf(msg->comments, comment_fmt, proto_remove_whole_path(src), line);
+	}
+	msg->entry = calloc(0, sizeof(proto_msg_def_t *));
+	msg->entries = 0;
+	return msg;
 }
 
 proto_msg_t *
-proto_create_message(const char *name, int spec_index, int unique_idx, const char *comment_fmt, char *src, const int line, const int isConstant) {
+proto_create_message(const char *name, int spec_index, int unique_idx, const char *comment_fmt, char *src,
+					 const int line, const int isConstant) {
 	proto_msg_t *msg = malloc(sizeof(proto_msg_t));
 	memset(msg, 0, sizeof(proto_msg_t));
 	if (spec_index > -1) {
@@ -121,14 +122,17 @@ proto_msg_def_t *
 proto_create_msg_elem(const char *name, const char *type, const char *rules) {
 	proto_msg_def_t *msgelem = malloc(sizeof(proto_msg_def_t));
 	memset(msgelem, 0, sizeof(proto_msg_def_t));
+	// ToDo - we don't know constraints yet..Have to be parsed correctly
 	msgelem->tags.valueLB = -1;
+	msgelem->tags.valueUB = -1;
 	msgelem->tags.sizeLB = -1;
-    if (name) {
-        strcpy(msgelem->name, name);
-    } else {
-        strcpy(msgelem->name, "value");
-    }
-    strcpy(msgelem->type, type);
+	msgelem->tags.sizeUB = -1;
+	if (name) {
+		strcpy(msgelem->name, name);
+	} else {
+		strcpy(msgelem->name, "value");
+	}
+	strcpy(msgelem->type, type);
 	if (rules != NULL)
 		strcpy(msgelem->rules, rules);
 	return msgelem;
@@ -136,46 +140,46 @@ proto_create_msg_elem(const char *name, const char *type, const char *rules) {
 
 void
 proto_msg_add_param(proto_msg_t *msg, proto_param_t *param) {
-    size_t existing_params = msg->params;
-    msg->param = realloc(msg->param, (existing_params + 1)*sizeof(proto_param_t *));
-    msg->param[existing_params] = param;
-    msg->params = existing_params + 1;
+	size_t existing_params = msg->params;
+	msg->param = realloc(msg->param, (existing_params + 1) * sizeof(proto_param_t *));
+	msg->param[existing_params] = param;
+	msg->params = existing_params + 1;
 }
 
 void
 proto_msg_add_elem(proto_msg_t *msg, proto_msg_def_t *elem) {
 	size_t existing_elems = msg->entries;
-	msg->entry = realloc(msg->entry, (existing_elems + 1)*sizeof(proto_msg_def_t *));
+	msg->entry = realloc(msg->entry, (existing_elems + 1) * sizeof(proto_msg_def_t *));
 	msg->entry[existing_elems] = elem;
 	msg->entries = existing_elems + 1;
 }
 
 void
 proto_msg_add_oneof(proto_msg_t *msg, proto_msg_oneof_t *oneof) {
-    size_t existing_oneofs = msg->oneofs;
-    msg->oneof = realloc(msg->oneof, (existing_oneofs + 1)*sizeof(proto_msg_oneof_t *));
-    msg->oneof[existing_oneofs] = oneof;
-    msg->oneofs = existing_oneofs + 1;
+	size_t existing_oneofs = msg->oneofs;
+	msg->oneof = realloc(msg->oneof, (existing_oneofs + 1) * sizeof(proto_msg_oneof_t *));
+	msg->oneof[existing_oneofs] = oneof;
+	msg->oneofs = existing_oneofs + 1;
 }
 
 void proto_oneof_add_elem(proto_msg_oneof_t *oneof, proto_msg_def_t *elem) {
-    size_t existing_elems = oneof->entries;
-    oneof->entry = realloc(oneof->entry, (existing_elems + 1)*sizeof(proto_msg_def_t *));
-    oneof->entry[existing_elems] = elem;
-    oneof->entries = existing_elems + 1;
+	size_t existing_elems = oneof->entries;
+	oneof->entry = realloc(oneof->entry, (existing_elems + 1) * sizeof(proto_msg_def_t *));
+	oneof->entry[existing_elems] = elem;
+	oneof->entries = existing_elems + 1;
 }
 
 void
 proto_messages_add_msg(proto_msg_t **messages, size_t *message_count, proto_msg_t *msg) {
 	size_t existing_count = *message_count;
-	messages = realloc(messages, (existing_count + 1)*sizeof(proto_msg_t *));
+	messages = realloc(messages, (existing_count + 1) * sizeof(proto_msg_t *));
 	messages[existing_count] = msg;
 	*message_count = existing_count + 1;
 }
 
 void proto_msg_add_nested(proto_msg_t *msg, proto_msg_t *nested) {
 	size_t existing_nesteds = msg->nesteds;
-	msg->nested = realloc(msg->nested, (existing_nesteds + 1)*sizeof(proto_msg_t *));
+	msg->nested = realloc(msg->nested, (existing_nesteds + 1) * sizeof(proto_msg_t *));
 	msg->nested[existing_nesteds] = nested;
 	msg->nesteds = existing_nesteds + 1;
 }
@@ -192,45 +196,47 @@ proto_create_import(const char *path, asn1p_oid_t *oid) {
 
 // tags_sum function returns sum of the tags. It is later used in the if condition statement to check, if the tags are
 // not empty. If the sum is non-zero, tags are printed. If the sum is zero, tags are not printed.
-int
+// Also, assuming that either valueLB and valueUB, or sizeLB and sizeUB are not set (i.e. one pair is [-1, -1]).
+// Otherwise there is a possibility that the limits of the long data type would be exceeded.
+long
 tags_sum(proto_tags_t tags) {
 
-    // avoiding the case when tags for sizeLB, sizeUB, valueLB and valueUB are not set (both are == -1).
-    // rest of tags are binary values (either 0, or 1)
+	// avoiding the case when tags for sizeLB, sizeUB, valueLB and valueUB are not set (both are == -1).
+	// rest of tags are binary values (either 0, or 1)
 
-    // it doesn't let the case when the actual sizeLB = -1 and sizeUB > sizeLB to go through
-    int sizeLB = 0;
-    if (tags.sizeLB == -1 && tags.sizeUB == tags.sizeLB) {
-        sizeLB = 0;
-    } else {
-        sizeLB = tags.sizeLB;
-    }
+	// it doesn't let the case when the actual sizeLB = -1 and sizeUB > sizeLB to go through
+	long sizeLB = 0;
+	if (tags.sizeLB == -1 && tags.sizeUB == tags.sizeLB) {
+		sizeLB = 0;
+	} else {
+		sizeLB = tags.sizeLB;
+	}
 
-    // it doesn't let the case when the actual sizeUB = -1 and sizeUB > sizeLB to go through
-    int sizeUB = 0;
-    if (tags.sizeUB == -1 && tags.sizeUB == tags.sizeLB) {
-        sizeUB = 0;
-    } else {
-        sizeUB = tags.sizeUB;
-    }
+	// it doesn't let the case when the actual sizeUB = -1 and sizeUB > sizeLB to go through
+	long sizeUB = 0;
+	if (tags.sizeUB == -1 && tags.sizeUB == tags.sizeLB) {
+		sizeUB = 0;
+	} else {
+		sizeUB = tags.sizeUB;
+	}
 
-    // it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
-    int valueLB = 0;
-    if (tags.valueLB == -1 && tags.valueLB == tags.valueUB) {
-        valueLB = 0;
-    } else {
-        valueLB = tags.valueLB;
-    }
+	// it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
+	long valueLB = 0;
+	if (tags.valueLB == -1 && tags.valueLB == tags.valueUB) {
+		valueLB = 0;
+	} else {
+		valueLB = tags.valueLB;
+	}
 
-    // it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
-    int valueUB = 0;
-    if (tags.valueUB == -1 && tags.valueLB == tags.valueUB) {
-        valueUB = 0;
-    } else {
-        valueUB = tags.valueUB;
-    }
+	// it doesn't let the case when the actual valueLB = -1 and valueUB > valueLB to go through
+	long valueUB = 0;
+	if (tags.valueUB == -1 && tags.valueLB == tags.valueUB) {
+		valueUB = 0;
+	} else {
+		valueUB = tags.valueUB;
+	}
 
 	return tags.optional + tags.sizeExt + sizeLB + sizeUB + tags.valueExt +
-           valueLB + valueUB + tags.repeated + tags.choiceExt + tags.fromChoiceExt +
-           tags.fromValueExt + tags.canonicalOrder + tags.unique;
+		   valueLB + valueUB + tags.repeated + tags.choiceExt + tags.fromChoiceExt +
+		   tags.fromValueExt + tags.canonicalOrder + tags.unique;
 }
