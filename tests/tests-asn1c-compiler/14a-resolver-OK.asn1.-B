@@ -14,18 +14,21 @@ import "asn1/v1/asn1.proto";
 // reference from 14a-resolver-OK.asn1:18
 // {alpha}
 message Alpha {
+    // @inject_tag: aper:"valueLB:2,valueUB:2,"
     int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"]; // Enumeration
 };
 
 // reference from 14a-resolver-OK.asn1:19
 // {other}
 message Other {
+    // @inject_tag: aper:"valueLB:1,valueUB:1,"
     int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"]; // Enumeration
 };
 
 // sequence from 14a-resolver-OK.asn1:22
 // {Struct}
 message Struct {
+    // @inject_tag: aper:"optional,"
     optional Enumeration member1 = 1 [ json_name="member1"];
     Enumeration member2 = 2 [ json_name="member2"];
 };
@@ -68,12 +71,14 @@ enum Enumeration {
 // reference from 14a-resolver-OK.asn1:45
 // {beta}
 message Beta {
+    // @inject_tag: aper:"valueLB:2,valueUB:2,"
     int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"]; // HiddenEnum
 };
 
 // reference from 14a-resolver-OK.asn1:46
 // {gamma}
 message Gamma {
+    // @inject_tag: aper:"valueLB:1,valueUB:1,"
     int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"]; // Enumeration
 };
 

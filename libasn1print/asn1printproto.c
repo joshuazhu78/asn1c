@@ -341,10 +341,17 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				msg = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
 										   "constant Integer from %s:%d", mod->source_file_name, expr->_lineno, 1);
 				msgelem = proto_create_msg_elem("value", "int32", NULL);
-				sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
-				msgelem->tags.valueLB = (int) expr->value->value.v_integer;
-				msgelem->tags.valueUB = (int) expr->value->value.v_integer;
-				// this should add a non-zero value to the unique tag (used in E2AP)
+                if ((long) expr->value->value.v_integer > 2147483647 || (long) expr->value->value.v_integer < -2147483647) {
+                    sprintf(msgelem->rules, "int64.const = %ld", (long) expr->value->value.v_integer);
+					strcpy(msgelem->type, "int64");
+                    msgelem->tags.valueLB = (long) expr->value->value.v_integer;
+                    msgelem->tags.valueUB = (long) expr->value->value.v_integer;
+                } else {
+                    sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
+                    msgelem->tags.valueLB = (int) expr->value->value.v_integer;
+                    msgelem->tags.valueUB = (int) expr->value->value.v_integer;
+                }
+				// ToDo - this should add a non-zero value to the unique tag (used in E2AP), but it doesn't. Figure out why.
 				msgelem->tags.unique = (int) expr->unique;
 				proto_msg_add_elem(msg, msgelem);
 				proto_messages_add_msg(message, messages, msg);
@@ -390,7 +397,17 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 
 				switch (expr->value->type) {
 					case ATV_INTEGER: // INTEGER
-						sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
+						if ((long) expr->value->value.v_integer > 2147483647 || (long) expr->value->value.v_integer < -2147483647) {
+							sprintf(msgelem->rules, "int64.const = %ld", (long) expr->value->value.v_integer);
+							strcpy(msgelem->type, "int64");
+							msgelem->tags.valueLB = (long) expr->value->value.v_integer;
+							msgelem->tags.valueUB = (long) expr->value->value.v_integer;
+
+						} else {
+							sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
+							msgelem->tags.valueLB = (int) expr->value->value.v_integer;
+							msgelem->tags.valueUB = (int) expr->value->value.v_integer;
+						}
 						proto_msg_add_elem(msg, msgelem);
 						proto_messages_add_msg(message, messages, msg);
 						return 0;
@@ -457,7 +474,12 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 						msgelem->tags.valueUB = upperbound;
 					}
 					char *constraints = proto_constraint_print(expr->constraints, flags | APF_INT32_VALUE);
-					sprintf(msgelem->rules, "int32 = {%s}", constraints);
+					if (lowerbound < -2147483647 || upperbound > 2147483647) {
+						sprintf(msgelem->rules, "int64 = {%s}", constraints);
+						strcpy(msgelem->type, "int64");
+					} else {
+						sprintf(msgelem->rules, "int32 = {%s}", constraints);
+					}
 					free(constraints);
 					// TODO: Find why 07 test does not show Reason values
 				}
@@ -690,6 +712,23 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
             if (elem->marker == EM_OPTIONAL) {
                 elem->tags.optional = 1;
             }
+
+			// checking if constraints are not NULL and parsing them
+			if (se->constraints != NULL) {
+				// obtaining lowerbound
+				long lowerbound;
+				lowerbound = get_lowerbound(se->constraints);
+				if (lowerbound != -1) {
+					elem->tags.sizeLB = lowerbound;
+				}
+				// obtaining upperbound
+				long upperbound;
+				upperbound = get_upperbound(se->constraints);
+				if (upperbound != -1) {
+					elem->tags.sizeUB = upperbound;
+				}
+			}
+
 			if (se->expr_type == ASN_BASIC_BIT_STRING) {
 				strcpy(elem->type, "asn1.v1.BitString");
 			} else if (se->expr_type == ASN_BASIC_OBJECT_IDENTIFIER) {
@@ -716,17 +755,17 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 				elem->tags.repeated = 1;
 				if (se->constraints != NULL) {
 					// obtaining lowerbound
-					long lowerbound;
-					lowerbound = get_lowerbound(se->constraints);
-					if (lowerbound != -1) {
-						elem->tags.sizeLB = lowerbound;
-					}
-					// obtaining upperbound
-					long upperbound;
-					upperbound = get_upperbound(se->constraints);
-					if (upperbound != -1) {
-						elem->tags.sizeUB = upperbound;
-					}
+//					long lowerbound;
+//					lowerbound = get_lowerbound(se->constraints);
+//					if (lowerbound != -1) {
+//						elem->tags.sizeLB = lowerbound;
+//					}
+//					// obtaining upperbound
+//					long upperbound;
+//					upperbound = get_upperbound(se->constraints);
+//					if (upperbound != -1) {
+//						elem->tags.sizeUB = upperbound;
+//					}
 
 					char *constraint = proto_constraint_print(se->constraints, APF_REPEATED_VALUE);
 					sprintf(elem->rules, "repeated = {%s}", constraint);
@@ -1083,9 +1122,15 @@ asn1extract_columns(asn1p_expr_t *expr, proto_msg_t **proto_msgs, size_t *proto_
 					const char *pval = asn1f_printable_value(colij.value->value);
 					switch (colij.value->value->type) {
 						case ATV_INTEGER:
-							strcpy(temptype, "int32");
-							snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
-									 (int) (colij.value->value->value.v_integer));
+							if ((long) (colij.value->value->value.v_integer) > 2147483647 || (long) (colij.value->value->value.v_integer) < -2147483647) {
+								strcpy(temptype, "int64");
+								snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
+										 (int) (colij.value->value->value.v_integer));
+							} else {
+								strcpy(temptype, "int32");
+								snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
+										 (int) (colij.value->value->value.v_integer));
+							}
 							break;
 						case ATV_STRING:
 						case ATV_UNPARSED:
@@ -1101,6 +1146,12 @@ asn1extract_columns(asn1p_expr_t *expr, proto_msg_t **proto_msgs, size_t *proto_
 					}
 				} else if (strcmp(colij.value->Identifier, "INTEGER") == 0) {
 					strcpy(temptype, "int32");
+					if (colij.value->value != NULL) {
+						if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
+							(long) (colij.value->value->value.v_integer) < -2147483647) {
+							strcpy(temptype, "int64");
+						}
+					}
 				} else if (strcmp(colij.value->Identifier, "REAL") == 0) {
 					strcpy(temptype, "float");
 				} else {

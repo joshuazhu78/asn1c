@@ -16,7 +16,9 @@ import "asn1/v1/asn1.proto";
 message DirectoryString001 {
     // choice from 58a-param-OK.asn1:15
     oneof directory_string {
+        // @inject_tag: aper:"choiceIdx:1,sizeLB:1,sizeUB:127,"
         string teletex_string = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 127}, json_name="teletexString"];
+        // @inject_tag: aper:"choiceIdx:2,sizeLB:1,sizeUB:127,"
         string utf8_string = 2 [(validate.v1.rules).string = {min_len: 1, max_len: 127}, json_name="utf8String"];
     }
 };
@@ -27,7 +29,9 @@ message DirectoryString001 {
 message DirectoryString004 {
     // choice from 58a-param-OK.asn1:15
     oneof directory_string {
+        // @inject_tag: aper:"choiceIdx:1,sizeLB:1,sizeUB:128,"
         string teletex_string = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 128}, json_name="teletexString"];
+        // @inject_tag: aper:"choiceIdx:2,sizeLB:1,sizeUB:128,"
         string utf8_string = 2 [(validate.v1.rules).string = {min_len: 1, max_len: 128}, json_name="utf8String"];
     }
 };

@@ -20,25 +20,19 @@ message Int123456 {
 // range of Integer from 07-int-OK.asn1:16
 // {Interval}
 message Interval {
-    // @inject_tag: aper:"valueLB:-100,valueUB:123456,"
-    int32 value = 1 [(validate.v1.rules).int32 = {gte: -100, lte: 123456}, json_name="value"];
+    // @inject_tag: aper:"valueLB:1,valueUB:123456,"
+    int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 123456}, json_name="value"];
 };
 
 // range of Integer from 07-int-OK.asn1:18
-// {LongerInterval}
-message LongerInterval {
-    // @inject_tag: aper:"valueLB:1,valueUB:68719476735,"
-    int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 68719476735}, json_name="value"];
-};
-
-// range of Integer from 07-int-OK.asn1:20
 // {SameInterval}
 message SameInterval {
     int32 value = 1 [(validate.v1.rules).int32 = {in: [1,2,3,4,5,6]}, json_name="value"];
 };
 
-// range of Integer from 07-int-OK.asn1:23
+// range of Integer from 07-int-OK.asn1:21
 // {Reason}
 message Reason {
     int32 value = 1 [ json_name="value"];
 };
+

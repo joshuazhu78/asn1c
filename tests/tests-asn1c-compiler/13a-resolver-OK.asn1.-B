@@ -14,12 +14,14 @@ import "asn1/v1/asn1.proto";
 // reference from 13a-resolver-OK.asn1:20
 // {alpha}
 message Alpha {
+    // @inject_tag: aper:"valueLB:123,valueUB:123,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123, json_name="value"]; // IntegerType
 };
 
 // reference from 13a-resolver-OK.asn1:21
 // {alpha2}
 message Alpha2 {
+    // @inject_tag: aper:"valueLB:123,valueUB:123,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123, json_name="value"]; // ModuleTestResolver2.IntegerType
 };
 
@@ -53,6 +55,7 @@ import "asn1/v1/asn1.proto";
 // reference from 13a-resolver-OK.asn1:41
 // {beta}
 message Beta {
+    // @inject_tag: aper:"valueLB:123,valueUB:123,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123, json_name="value"]; // HiddenType
 };
 

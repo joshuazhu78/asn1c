@@ -56,6 +56,6 @@ message Interval {
 // {LongerInterval}
 message LongerInterval {
     // @inject_tag: aper:"valueLB:-55,valueUB:68719476735,"
-    int32 value = 1 [(validate.v1.rules).int32 = {gte: -55, lte: 68719476735}, json_name="value"];
+    int64 value = 1 [(validate.v1.rules).int64 = {gte: -55, lte: 68719476735}, json_name="value"];
 };
 

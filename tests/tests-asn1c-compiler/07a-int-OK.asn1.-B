@@ -28,7 +28,7 @@ message Interval {
 // {LongerInterval}
 message LongerInterval {
     // @inject_tag: aper:"valueLB:1,valueUB:68719476735,"
-    int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 68719476735}, json_name="value"];
+    int64 value = 1 [(validate.v1.rules).int64 = {gte: 1, lte: 68719476735}, json_name="value"];
 };
 
 // range of Integer from 07a-int-OK.asn1:20
@@ -42,3 +42,4 @@ message SameInterval {
 message Reason {
     int32 value = 1 [ json_name="value"];
 };
+

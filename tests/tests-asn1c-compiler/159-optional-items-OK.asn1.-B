@@ -15,10 +15,11 @@ import "asn1/v1/asn1.proto";
 message Pdu {
     // @inject_tag: aper:"optional,sizeLB:1,sizeUB:123456,"
     repeated ConstrainedString element_list = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 123456}, json_name="element-List"];
-    // @inject_tag: aper:"optional,"
+    // @inject_tag: aper:"optional,sizeLB:1,sizeUB:150,"
     optional string constrained_string = 2 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="constrainedString"];
-    // @inject_tag: aper:"optional,"
+    // @inject_tag: aper:"optional,sizeLB:22,sizeUB:32,"
     optional asn1.v1.BitString id = 3 [ json_name="id"];
+    // @inject_tag: aper:"sizeUB:123456,"
     int32 interval = 4 [ json_name="interval"];
     // @inject_tag: aper:"optional,"
     optional OtherIdentity other_id = 5 [ json_name="other-ID"];

@@ -23,3 +23,10 @@ Where
 Example:
 	07-int-OK.asn1		# Correct ASN.1 file
 	07-int-OK.asn1.-EF	# Test of file regeneration with -E -F flags.
+
+
+If you're running MacOS, you have to add following variables to your environment:
+export LC_CTYPE=C
+export LANG=C
+
+Without them `make check` will fail with an error `sed: RE error: illegal byte sequence`.
