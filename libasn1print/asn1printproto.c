@@ -41,9 +41,9 @@ typedef enum {
 } print_method_e;
 static print_method_e print_method_;
 
-static char *proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags);
+static char *proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags, long *lowerbound, long *upperbound);
 
-static char *proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags);
+static char *proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags, long *bound);
 
 static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum);
 
@@ -437,7 +437,15 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		proto_msg_t *msg = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
 												"range of Integer from %s:%d", mod->source_file_name, expr->_lineno, 0);
 		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
-		char *constraints = proto_constraint_print(expr->constraints, flags);
+		long lowerbound = -1;
+		long upperbound = -1;
+		char *constraints = proto_constraint_print(expr->constraints, flags, &lowerbound, &upperbound);
+		if (lowerbound != -1) {
+			msgelem->tags.valueLB = lowerbound;
+		}
+		if (upperbound != -1) {
+			msgelem->tags.valueUB = upperbound;
+		}
 		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
 		free(constraints);
 		proto_msg_add_elem(msg, msgelem);
@@ -462,18 +470,15 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			case ASN_BASIC_INTEGER:
 				if (expr->constraints != NULL) {
 					// adding APER tags
-					long lowerbound;
-					lowerbound = get_lowerbound(expr->constraints);
+					long lowerbound = -1;
+					long upperbound = -1;
+					char *constraints = proto_constraint_print(expr->constraints, flags | APF_INT32_VALUE, &lowerbound, &upperbound);
 					if (lowerbound != -1) {
 						msgelem->tags.valueLB = lowerbound;
 					}
-					// obtaining upperbound
-					long upperbound;
-					upperbound = get_upperbound(expr->constraints);
 					if (upperbound != -1) {
 						msgelem->tags.valueUB = upperbound;
 					}
-					char *constraints = proto_constraint_print(expr->constraints, flags | APF_INT32_VALUE);
 					if (lowerbound < -2147483647 || upperbound > 2147483647) {
 						sprintf(msgelem->rules, "int64 = {%s}", constraints);
 						strcpy(msgelem->type, "int64");
@@ -491,18 +496,15 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				strcpy(msgelem->type, "string");
 				if (expr->constraints != NULL) {
 					// adding APER tags
-					long lowerbound;
-					lowerbound = get_lowerbound(expr->constraints);
+					long lowerbound = -1;
+					long upperbound = -1;
+					char *constraints = proto_constraint_print(expr->constraints, flags | APF_STRING_VALUE, &lowerbound, &upperbound);
 					if (lowerbound != -1) {
 						msgelem->tags.sizeLB = lowerbound;
 					}
-					// obtaining upperbound
-					long upperbound;
-					upperbound = get_upperbound(expr->constraints);
 					if (upperbound != -1) {
 						msgelem->tags.sizeUB = upperbound;
 					}
-					char *constraints = proto_constraint_print(expr->constraints, flags | APF_STRING_VALUE);
 					sprintf(msgelem->rules, "string = {%s}", constraints);
 					free(constraints);
 				}
@@ -538,18 +540,15 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
                 // adding constraints
                 if (expr->constraints != NULL) {
                     // adding APER tags
-                    long lowerbound;
-                    lowerbound = get_lowerbound(expr->constraints);
-                    if (lowerbound != -1) {
-                        msgelem->tags.sizeLB = lowerbound;
-                    }
-                    // obtaining upperbound
-                    long upperbound;
-                    upperbound = get_upperbound(expr->constraints);
-                    if (upperbound != -1) {
-                        msgelem->tags.sizeUB = upperbound;
-                    }
-                    char *constraint = proto_constraint_print(expr->constraints, APF_REPEATED_VALUE);
+                    long lowerbound = -1;
+                    long upperbound = -1;
+                    char *constraint = proto_constraint_print(expr->constraints, APF_REPEATED_VALUE, &lowerbound, &upperbound);
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
                     sprintf(msgelem->rules, "bytes.len = %s", constraint);
                     free(constraint);
                 }
@@ -562,19 +561,16 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
                 // adding constraints
                 if (expr->constraints != NULL) {
                     // adding APER tags
-                    long lowerbound;
-                    lowerbound = get_lowerbound(expr->constraints);
-                    if (lowerbound != -1) {
-                        msgelem->tags.sizeLB = lowerbound;
-                    }
-                    // obtaining upperbound
-                    long upperbound;
-                    upperbound = get_upperbound(expr->constraints);
-                    if (upperbound != -1) {
-                        msgelem->tags.sizeUB = upperbound;
-                    }
-                    char *constraint = proto_constraint_print(expr->constraints, APF_STRING_VALUE);
-                    sprintf(msgelem->rules, "string = {%s}", constraint);
+                    long lowerbound = -1;
+                    long upperbound = -1;
+                    char *constraint = proto_constraint_print(expr->constraints, APF_STRING_VALUE, &lowerbound, &upperbound);
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					sprintf(msgelem->rules, "string = {%s}", constraint);
                     free(constraint);
                 }
 
@@ -738,7 +734,15 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 			} else if (se->expr_type == ASN_BASIC_OCTET_STRING) {
 				strcpy(elem->type, "bytes");
 				if (se->constraints != NULL) {
-					char *constraint = proto_constraint_print(se->constraints, APF_REPEATED_VALUE);
+					long lowerbound = -1;
+					long upperbound = -1;
+					char *constraint = proto_constraint_print(se->constraints, APF_REPEATED_VALUE, &lowerbound, &upperbound);
+					if (lowerbound != -1) {
+						elem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						elem->tags.sizeUB = upperbound;
+					}
 					sprintf(elem->rules, "bytes.len = %s", constraint);
 					free(constraint);
 				}
@@ -747,7 +751,15 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 					   se->expr_type == ASN_STRING_TeletexString) {
 				strcpy(elem->type, "string");
 				if (se->constraints != NULL) {
-					char *constraint = proto_constraint_print(se->constraints, APF_STRING_VALUE);
+					long lowerbound = -1;
+					long upperbound = -1;
+					char *constraint = proto_constraint_print(se->constraints, APF_STRING_VALUE, &lowerbound, &upperbound);
+					if (lowerbound != -1) {
+						elem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						elem->tags.sizeUB = upperbound;
+					}
 					sprintf(elem->rules, "string = {%s}", constraint);
 					free(constraint);
 				}
@@ -767,7 +779,15 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 //						elem->tags.sizeUB = upperbound;
 //					}
 
-					char *constraint = proto_constraint_print(se->constraints, APF_REPEATED_VALUE);
+					long lowerbound = -1;
+					long upperbound = -1;
+					char *constraint = proto_constraint_print(se->constraints, APF_REPEATED_VALUE, &lowerbound, &upperbound);
+					if (lowerbound != -1) {
+						elem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						elem->tags.sizeUB = upperbound;
+					}
 					sprintf(elem->rules, "repeated = {%s}", constraint);
 					free(constraint);
 				}
@@ -867,7 +887,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 }
 
 static char *
-proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags) {
+proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags, long *lowerbound, long *upperbound) {
 	int symno = 0;
 	int perhaps_subconstraints = 0;
 	char *result = malloc(1024 * sizeof(char));
@@ -878,7 +898,8 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 
 	switch (ct->type) {
 		case ACT_EL_TYPE:
-			val = proto_value_print(ct->containedSubtype, (enum asn1print_flags) flags);
+			val = proto_value_print(ct->containedSubtype, (enum asn1print_flags) flags, lowerbound);
+			*upperbound = *lowerbound;
 			strcat(result, val);
 			free(val);
 			perhaps_subconstraints = 1;
@@ -886,16 +907,17 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 		case ACT_EL_VALUE:
 			if (flags & APF_STRING_VALUE) {
 				strcat(result, "min_len: ");
-				val = proto_value_print(ct->value, (enum asn1print_flags) flags);
+				val = proto_value_print(ct->value, (enum asn1print_flags) flags, lowerbound);
 				strcat(result, val);
 				free(val);
 				strcat(result, ", max_len: ");
-				val = proto_value_print(ct->value, (enum asn1print_flags) flags);
+				val = proto_value_print(ct->value, (enum asn1print_flags) flags, upperbound);
 				strcat(result, val);
 				free(val);
 				break;
 			}
-			val = proto_value_print(ct->value, (enum asn1print_flags) flags);
+			val = proto_value_print(ct->value, (enum asn1print_flags) flags, lowerbound);
+			*upperbound = *lowerbound;
 			strcat(result, val);
 			free(val);
 			perhaps_subconstraints = 1;
@@ -929,11 +951,11 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 					strcat(result, "?..?");
 					break;
 			}
-			val = proto_value_print(ct->range_start, (enum asn1print_flags) flags);
+			val = proto_value_print(ct->range_start, (enum asn1print_flags) flags, lowerbound);
 			strcat(result, val);
 			free(val);
 
-			val = proto_value_print(ct->range_stop, (enum asn1print_flags) flags);
+			val = proto_value_print(ct->range_stop, (enum asn1print_flags) flags, upperbound);
 			if (strlen(val) == 0) {
 				free(val);
 				break;
@@ -984,7 +1006,7 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 			}
 			assert(ct->el_count != 0);
 			assert(ct->el_count == 1);
-			char *add = proto_constraint_print(ct->elements[0], flags);
+			char *add = proto_constraint_print(ct->elements[0], flags, lowerbound, upperbound);
 			strcat(result, add);
 			free(add);
 			break;
@@ -1000,7 +1022,7 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 			for (i = 0; i < ct->el_count; i++) {
 				asn1p_constraint_t *cel = ct->elements[i];
 				if (i) strcat(result, ", ");
-				char *add = proto_constraint_print(cel, flags);
+				char *add = proto_constraint_print(cel, flags, lowerbound, upperbound);
 				strcat(result, add);
 				free(add);
 				switch (cel->presence) {
@@ -1054,7 +1076,7 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 			for (i = 0; i < ct->el_count; i++) {
 				if (i) strcat(result, symtable[symno]);
 				if (ct->type == ACT_CA_CRC) strcat(result, "{");
-				char *add = proto_constraint_print(ct->elements[i], flags);
+				char *add = proto_constraint_print(ct->elements[i], flags, lowerbound, upperbound);
 				strcat(result, add);
 				free(add);
 				if (ct->type == ACT_CA_CRC) strcat(result, "}");
@@ -1077,7 +1099,7 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 	if (perhaps_subconstraints && ct->el_count) {
 		strcat(result, " ");
 		assert(ct->el_count == 1);
-		char *add = proto_constraint_print(ct->elements[0], flags);
+		char *add = proto_constraint_print(ct->elements[0], flags, lowerbound, upperbound);
 		strcat(result, add);
 		free(add);
 	}
@@ -1195,7 +1217,7 @@ asn1extract_columns(asn1p_expr_t *expr, proto_msg_t **proto_msgs, size_t *proto_
 }
 
 static char *
-proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags) {
+proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags, long *bound) {
 	char *result = malloc(256 * sizeof(char));
 	memset(result, 0, 256);
 	if (val == NULL)
@@ -1221,12 +1243,15 @@ proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags) {
 			return result;
 		case ATV_INTEGER:
 			strcat(result, asn1p_itoa(val->value.v_integer));
+			*bound = val->value.v_integer;
 			return result;
 		case ATV_MIN:
 			strcat(result, "0");
+			*bound = -2147483647;
 			return result;
 		case ATV_MAX:
 			if (flags & 0x100) { // APF_INT32_VALUE
+				*bound = 2147483647;
 				sprintf(out, "%d", INT32_MAX);
 				strcat(result, out);
 				return result;
@@ -1318,7 +1343,7 @@ proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags) {
 			return result;
 		case ATV_CHOICE_IDENTIFIER:
 			strcat(result, val->value.choice_identifier.identifier);
-			char *val1 = proto_value_print(val->value.choice_identifier.value, flags);
+			char *val1 = proto_value_print(val->value.choice_identifier.value, flags, bound);
 			strcat(result, val1);
 			free(val1);
 			return result;

@@ -72,8 +72,8 @@ message Type3 {
 // range of Integer from 16a-constraint-OK.asn1:42
 // {Type4}
 message Type4 {
-    // @inject_tag: aper:"valueLB:1,valueUB:2147483648,"
-    int64 value = 1 [(validate.v1.rules).int64 = {gte: 1, lte: 2147483647}, json_name="value"];
+    // @inject_tag: aper:"valueLB:1,valueUB:2147483647,"
+    int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 2147483647}, json_name="value"];
 };
 
 // range of Integer from 16a-constraint-OK.asn1:43

@@ -27,6 +27,7 @@ message Interval {
 // range of Integer from 07-int-OK.asn1:18
 // {SameInterval}
 message SameInterval {
+    // @inject_tag: aper:"valueLB:6,valueUB:6,"
     int32 value = 1 [(validate.v1.rules).int32 = {in: [1,2,3,4,5,6]}, json_name="value"];
 };
 
