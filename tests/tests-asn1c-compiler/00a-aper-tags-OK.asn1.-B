@@ -28,13 +28,13 @@ message SomeId {
 // {Some-Identity}
 message SomeIdentity {
     // @inject_tag: aper:"sizeLB:4,sizeUB:4,"
-    bytes value = 1 [(validate.v1.rules).bytes.len = 4, json_name="value"];
+    bytes value = 1 [(validate.v1.rules).bytes = {min_len: 4, max_len: 4}, json_name="value"];
 };
 
 // range of Integer from 00a-aper-tags-OK.asn1:23
 // {ConstrainedString}
 message ConstrainedString {
-    // @inject_tag: aper:"sizeLB:1,sizeUB:150,"
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:150,"
     string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="value"];
 };
 

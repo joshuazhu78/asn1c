@@ -1,0 +1,41 @@
+////////////////////// moduletestconstraints1.proto //////////////////////
+// Protobuf generated from /160-valueExt-OK.asn1 by asn1c-0.9.29
+// ModuleTestConstraints1 { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 160 }
+
+syntax = "proto3";
+
+package pkg160_value_ext_ok_asn1.v1;
+option go_package = "pkg160_value_ext_ok_asn1/v1/moduletestconstraints1";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+
+// sequence from 160-valueExt-OK.asn1:16
+// {T2}
+message T2 {
+    T1 item = 1 [ json_name="item"];
+};
+
+// sequence from 160-valueExt-OK.asn1:19
+// {T1}
+message T1 {
+    // @inject_tag: aper:"optional,sizeExt,sizeLB:1,sizeUB:16,"
+    repeated ConstrainedString element_list = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 16}, json_name="element-List"];
+    LongerInterval interval = 2 [ json_name="interval"];
+    ConstrainedString cs = 3 [ json_name="cs"];
+};
+
+// range of Integer from 160-valueExt-OK.asn1:25
+// {ConstrainedString}
+message ConstrainedString {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:150,"
+    string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="value"];
+};
+
+// range of Integer from 160-valueExt-OK.asn1:27
+// {LongerInterval}
+message LongerInterval {
+    // @inject_tag: aper:"valueExt,valueLB:-55,valueUB:68719476735,"
+    int64 value = 1 [(validate.v1.rules).int64 = {gte: -55, lte: 68719476735}, json_name="value"];
+};
+

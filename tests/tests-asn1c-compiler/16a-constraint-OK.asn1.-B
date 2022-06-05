@@ -51,7 +51,7 @@ import "asn1/v1/asn1.proto";
 // range of Integer from 16a-constraint-OK.asn1:39
 // {Type1}
 message Type1 {
-    // @inject_tag: aper:"sizeLB:1,sizeUB:10,"
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:10,"
     string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 10}, json_name="value"];
 };
 

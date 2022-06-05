@@ -15,11 +15,11 @@ import "asn1/v1/asn1.proto";
 message Pdu {
     // @inject_tag: aper:"optional,sizeLB:1,sizeUB:123456,"
     repeated ConstrainedString element_list = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 123456}, json_name="element-List"];
-    // @inject_tag: aper:"optional,sizeLB:1,sizeUB:150,"
+    // @inject_tag: aper:"optional,sizeExt,sizeLB:1,sizeUB:150,"
     optional string constrained_string = 2 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="constrainedString"];
     // @inject_tag: aper:"optional,sizeLB:22,sizeUB:32,"
     optional asn1.v1.BitString id = 3 [ json_name="id"];
-    // @inject_tag: aper:"sizeUB:123456,"
+    // @inject_tag: aper:"valueLB:-100,valueUB:123456,"
     int32 interval = 4 [ json_name="interval"];
     // @inject_tag: aper:"optional,"
     optional OtherIdentity other_id = 5 [ json_name="other-ID"];
@@ -28,7 +28,7 @@ message Pdu {
 // range of Integer from 159-optional-items-OK.asn1:23
 // {ConstrainedString}
 message ConstrainedString {
-    // @inject_tag: aper:"sizeLB:1,sizeUB:1000,"
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:1000,"
     string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 1000}, json_name="value"];
 };
 
@@ -36,7 +36,7 @@ message ConstrainedString {
 // {OtherIdentity}
 message OtherIdentity {
     // @inject_tag: aper:"sizeLB:3,sizeUB:3,"
-    bytes value = 1 [(validate.v1.rules).bytes.len = 3, json_name="value"];
+    bytes value = 1 [(validate.v1.rules).bytes = {min_len: 3, max_len: 3}, json_name="value"];
 };
 
 // constant Integer from 159-optional-items-OK.asn1:27

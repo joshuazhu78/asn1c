@@ -1,0 +1,33 @@
+////////////////////// moduletestconstraints1.proto //////////////////////
+// Protobuf generated from /161-sizeExt-OK.asn1 by asn1c-0.9.29
+// ModuleTestConstraints1 { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 161 }
+
+syntax = "proto3";
+
+package pkg161_size_ext_ok_asn1.v1;
+option go_package = "pkg161_size_ext_ok_asn1/v1/moduletestconstraints1";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+
+// range of Integer from 161-sizeExt-OK.asn1:14
+// {ConstrainedBitString}
+message ConstrainedBitString {
+    // @inject_tag: aper:"sizeExt,sizeLB:18,sizeUB:36,"
+    asn1.v1.BitString value = 1 [ json_name="value"];
+};
+
+// range of Integer from 161-sizeExt-OK.asn1:16
+// {ConstrainedString}
+message ConstrainedString {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:150,"
+    string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="value"];
+};
+
+// range of Integer from 161-sizeExt-OK.asn1:18
+// {ConstrainedByteArray}
+message ConstrainedByteArray {
+    // @inject_tag: aper:"sizeExt,sizeLB:2,sizeUB:10,"
+    bytes value = 1 [(validate.v1.rules).bytes = {min_len: 2, max_len: 10}, json_name="value"];
+};
+
