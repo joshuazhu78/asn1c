@@ -34,7 +34,7 @@ top_builddir="${top_builddir:-../..}"
 # Unix-based distributions have a different syntax for csplit and it is better to use gcsplit (GNU csplit) in
 # order to keep this script simple. To enable gcsplit in MacOS, run:
 # brew install coreutils
-if [[ "$OSTYPE"=-"darwin"* ]]; then
+if [[ "$OSTYPE" == "darwin"* ]]; then
   for ref in ${top_srcdir}/tests/tests-asn1c-compiler/*.asn1.-B; do
     baseref=$(basename -- "$ref")
     reffilename=${baseref/%".-B"/""}
