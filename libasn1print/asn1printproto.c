@@ -822,10 +822,10 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 			if (TQ_FIRST(&expr->members)) {
 				TQ_FOR(se, &(expr->members), next)
 				{
-					elements++;
 					if (se->expr_type == A1TC_EXTENSIBLE) {
 						break;
 					}
+					elements++;
 				}
 			}
 		}
@@ -1027,7 +1027,6 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 					elem->tags.choiceExt = 1;
 				}
 
-				// ToDo - in case of enumerators, we should take care of lower and upper bounds..
 				// make sure that the type is enumerator
 				int enm = 0;
 				int elCount = -1;
@@ -1040,7 +1039,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				}
 				if (enm) {
 					if (elCount != -1) {
-						elem->tags.valueUB = elCount-1; // for some reason -1
+						elem->tags.valueUB = elCount;
 					}
 					elem->tags.valueLB = 0;
 				}
