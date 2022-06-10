@@ -11,13 +11,20 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 162-choiceExt-OK.asn1:15
-// {ITEM}
-message Item {
-    // choice from 162-choiceExt-OK.asn1:15
-    oneof item {
+// {Item2}
+message Item2 {
+    // @inject_tag: aper:"choiceExt,"
+    Item1 ie = 1 [ json_name="ie"];
+};
+
+// sequence from 162-choiceExt-OK.asn1:20
+// {Item1}
+message Item1 {
+    // choice from 162-choiceExt-OK.asn1:20
+    oneof item1 {
         // @inject_tag: aper:"choiceIdx:1,sizeExt,sizeLB:22,sizeUB:32,"
         asn1.v1.BitString ch1 = 1 [ json_name="ch1"];
-        // @inject_tag: aper:"choiceIdx:2,valueExt,valueLB:1,valueUB:64,"
+        // @inject_tag: aper:"choiceIdx:2,fromChoiceExt,valueExt,valueLB:1,valueUB:64,"
         int32 ch2 = 2 [ json_name="ch2"];
     }
 };

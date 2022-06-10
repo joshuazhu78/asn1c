@@ -49,7 +49,7 @@ static char *proto_value_print(const asn1p_value_t *val, enum asn1print_flags fl
 
 static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum);
 
-static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated);
+static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree);
 
 static int asn1extract_columns(asn1p_expr_t *expr,
 							   proto_msg_t **proto_msgs, size_t *proto_msg_count,
@@ -193,7 +193,7 @@ get_extensibility(const asn1p_constraint_t *ct) {
 	if (ct != NULL) {
 		switch (ct->type) {
 			case ACT_EL_EXT:
-				// this is to parse extension flag
+				// this is to parse extension flag for basic types (e.g., INTEGER, BIT STRING, etc.)
 				result = 1;
 				break;
 			default:
@@ -680,7 +680,15 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			strcat(msg->comments, param_comments);
 			free(param_comments);
 		}
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF);
+
+		struct asn1p_expr_s *asntree;
+		if (asn->modules.tq_head != NULL) {
+			if (asn->modules.tq_head->members.tq_head != NULL) {
+				asntree = asn->modules.tq_head->members.tq_head;
+			}
+		}
+
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree);
 
 		proto_messages_add_msg(message, messages, msg);
 
@@ -699,7 +707,14 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 														  "choice from %s:%d", mod->source_file_name, expr->_lineno);
 		proto_msg_add_oneof(msg, oneof);
 
-		proto_process_children(expr, (proto_msg_t *) oneof, 0);
+		struct asn1p_expr_s *asntree;
+		if (asn->modules.tq_head != NULL) {
+			if (asn->modules.tq_head->members.tq_head != NULL) {
+				asntree = asn->modules.tq_head->members.tq_head;
+			}
+		}
+
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree);
 
 		proto_messages_add_msg(message, messages, msg);
 
@@ -757,8 +772,81 @@ proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum) {
 	return 0;
 }
 
+// structure_is_extensible function returns 1 if the referred structure can be extended (contains extension flag)
+// or 1, if it doesn't. It also puts 1 in oneofDependent variable, if the structure is of type CHOICE.
+// Iteration over the ASN.1 tree is recursive.
 static int
-proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
+structure_is_extensible(asn1p_expr_t *expr, const char *name, int *oneofDependent) {
+	asn1p_expr_t *se;
+	int extensibility = 0;
+
+	if (strcmp(expr->Identifier, name) == 0) {
+		if (expr->expr_type == ASN_CONSTR_CHOICE) {
+			*oneofDependent = 1;
+		}
+		if (TQ_FIRST(&expr->members)) {
+			TQ_FOR(se, &(expr->members), next)
+			{
+				if (se->expr_type == A1TC_EXTENSIBLE) {
+					extensibility = 1;
+					break;
+				}
+			}
+		}
+	} else {
+		if (expr->next.tq_next != NULL) {
+			struct asn1p_expr_s *next = expr->next.tq_next;
+			int isExtensible = 0;
+			int oneof = 0;
+			isExtensible = structure_is_extensible(next, name, &oneof);
+			if (isExtensible) {
+				*oneofDependent = oneof;
+				return isExtensible;
+			}
+		}
+	}
+
+	return extensibility;
+}
+
+// is_enum function verifies if the parsed structure is enumerator or not.
+static int
+is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
+	asn1p_expr_t *se;
+	int enm = 0;
+	int elements = -1;
+
+	if (strcmp(expr->Identifier, name) == 0) {
+		if (expr->expr_type == ASN_BASIC_ENUMERATED) {
+			enm = 1;
+			if (TQ_FIRST(&expr->members)) {
+				TQ_FOR(se, &(expr->members), next)
+				{
+					elements++;
+					if (se->expr_type == A1TC_EXTENSIBLE) {
+						break;
+					}
+				}
+			}
+		}
+	} else {
+		if (expr->next.tq_next != NULL) {
+			struct asn1p_expr_s *next = expr->next.tq_next;
+			int isEnum = 0;
+			isEnum = is_enum(next, name, &elements);
+			*elCount = elements;
+			if (isEnum) {
+				return 1;
+			}
+		}
+	}
+
+	*elCount = elements;
+	return enm;
+}
+
+static int
+proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -775,6 +863,13 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 			// checking if the structure is optional and adding a tag if it is
 			if (elem->marker == EM_OPTIONAL) {
 				elem->tags.optional = 1;
+			}
+
+			// if extension flag is set, we are iterating over items in extension
+			if (extensible && oneof) {
+				elem->tags.fromChoiceExt = 1;
+			} else if (extensible && oneof == 0) {
+				elem->tags.fromValueExt = 1;
 			}
 
 			// checking if constraints are not NULL and parsing them
@@ -908,7 +1003,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 //						strcpy(elem->type, comp->name);
 //					}
 //				} else if (se2->meta_type == AMT_TYPE) {
-//					proto_process_children(se, msgdef, 0);
+//					proto_process_children(se, msgdef, 0, 0, asntree);
 //					fprintf(stderr, "recursing expr_type: %d and meta_type: %d in %s:%s \n",
 //							se2->expr_type, se2->meta_type, se->Identifier, se2->Identifier);
 //				} else {
@@ -916,6 +1011,40 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 //							se->expr_type, se->meta_type, expr->Identifier, se->Identifier);
 //				}
 			} else if (se->expr_type == A1TC_REFERENCE && se->meta_type == AMT_TYPEREF) {
+				// checking if the structure is extensible
+				int isExtensible = 0;
+				int oneofDependent = 0;
+				if (asntree != NULL) {
+					// iterating over the whole tree
+					isExtensible = structure_is_extensible(asntree, se->reference->components->name, &oneofDependent);
+				} else {
+					// backup option - iterating over what's left
+					isExtensible = structure_is_extensible(expr, se->reference->components->name, &oneofDependent);
+				}
+				if (isExtensible == 1 && oneofDependent == 0) {
+					elem->tags.valueExt = 1;
+				} else if (isExtensible == 1 && oneofDependent == 1) {
+					elem->tags.choiceExt = 1;
+				}
+
+				// ToDo - in case of enumerators, we should take care of lower and upper bounds..
+				// make sure that the type is enumerator
+				int enm = 0;
+				int elCount = -1;
+				if (asntree != NULL) {
+					// iterating over the whole tree
+					enm = is_enum(asntree, se->reference->components->name, &elCount);
+				} else {
+					// backup option - iterating over what's left
+					enm = is_enum(expr, se->reference->components->name, &elCount);
+				}
+				if (enm) {
+					if (elCount != -1) {
+						elem->tags.valueUB = elCount-1; // for some reason -1
+					}
+					elem->tags.valueLB = 0;
+				}
+
 				if (se->constraints &&
 					se->constraints->type == ACT_CA_SET) {
 					if (se->constraints->el_count == 1) {
@@ -959,8 +1088,6 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated) {
 				// fprintf(stderr, "Unexpected type %d %d\n", se->expr_type, se->meta_type);
 			}
 			if (se->expr_type == A1TC_EXTENSIBLE) {
-				// ToDo - here is a placeholder for sizeExt and valueExt tags
-				elem->tags.fromValueExt = 1;
 				extensible = 1;
 				continue;
 			} else if (se->expr_type == A1TC_REFERENCE) {

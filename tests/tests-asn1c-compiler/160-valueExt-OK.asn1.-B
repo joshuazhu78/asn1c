@@ -13,6 +13,7 @@ import "asn1/v1/asn1.proto";
 // sequence from 160-valueExt-OK.asn1:16
 // {T2}
 message T2 {
+    // @inject_tag: aper:"valueExt,"
     T1 item = 1 [ json_name="item"];
 };
 
@@ -22,6 +23,7 @@ message T1 {
     // @inject_tag: aper:"optional,sizeExt,sizeLB:1,sizeUB:16,"
     repeated ConstrainedString element_list = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 16}, json_name="element-List"];
     LongerInterval interval = 2 [ json_name="interval"];
+    // @inject_tag: aper:"fromValueExt,"
     ConstrainedString cs = 3 [ json_name="cs"];
 };
 
