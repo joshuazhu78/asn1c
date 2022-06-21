@@ -27,4 +27,10 @@ BEGIN
         seven
     }
 
+    Item3 ::= CHOICE {
+        ch1 Item2,
+        ...,
+        ch2 Item1
+    }
+
 END

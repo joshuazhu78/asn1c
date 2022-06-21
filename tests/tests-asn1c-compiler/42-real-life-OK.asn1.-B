@@ -14,15 +14,15 @@ import "asn1/v1/asn1.proto";
 // {LogLine}
 message LogLine {
     int32 line_digest = 1 [ json_name="line-digest"];
-    // @inject_tag: aper:"sizeLB:1,sizeUB:2147483648,"
-    repeated VariablePartSet varsets = 2 [(validate.v1.rules).repeated = {min_items: 1}, json_name="varsets"];
+    // @inject_tag: aper:"sizeLB:1,sizeUB:2147483647,"
+    repeated VariablePartSet varsets = 2 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2147483647}, json_name="varsets"];
 };
 
 // sequence from 42-real-life-OK.asn1:33
 // {VariablePartSet}
 message VariablePartSet {
-    // @inject_tag: aper:"sizeLB:0,sizeUB:2147483648,"
-    repeated VariablePart vparts = 1 [(validate.v1.rules).repeated = {min_items: 0}, json_name="vparts"];
+    // @inject_tag: aper:"sizeLB:0,sizeUB:2147483647,"
+    repeated VariablePart vparts = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="vparts"];
     // @inject_tag: aper:"valueExt,"
     ActionItem resolution = 2 [ json_name="resolution"];
 };

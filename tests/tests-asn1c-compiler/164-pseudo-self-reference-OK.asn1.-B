@@ -1,0 +1,20 @@
+////////////////////// modulelapstorage.proto //////////////////////
+// Protobuf generated from /164-pseudo-self-reference-OK.asn1 by asn1c-0.9.29
+// ModuleLAPStorage { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 164 }
+
+syntax = "proto3";
+
+package pkg164_pseudo_self_reference_ok_asn1.v1;
+option go_package = "pkg164_pseudo_self_reference_ok_asn1/v1/modulelapstorage";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+
+// sequence from 164-pseudo-self-reference-OK.asn1:20
+// {Reference-Structure}
+message ReferenceStructure {
+    // @inject_tag: aper:"valueExt,valueLB:1,valueUB:32,sizeLB:0,sizeUB:2147483647,"
+    repeated int32 list = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list"];
+    bool item = 2 [ json_name="item"];
+};
+

@@ -986,8 +986,77 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 						strcpy(elem->type, comp->name);
 					}
 				} else {
-					fprintf(stderr, "unhandled expr_type: %d and meta_type: %d in %s:%s \n",
-							se->expr_type, se->meta_type, expr->Identifier, se->Identifier);
+					// Could Sequence OF refer directly to Sequence OF?
+					if ((se2->constraints != NULL && se2->expr_type == ASN_BASIC_INTEGER)) {
+						// obtaining lowerbound
+						long lowerbound;
+						lowerbound = get_lowerbound(se2->constraints);
+						if (lowerbound != -1) {
+							elem->tags.valueLB = lowerbound;
+						}
+						// obtaining upperbound
+						long upperbound;
+						upperbound = get_upperbound(se2->constraints);
+						if (upperbound != -1) {
+							elem->tags.valueUB = upperbound;
+						}
+						int extensibility;
+						extensibility = get_extensibility(se2->constraints);
+						if (extensibility) {
+							elem->tags.valueExt = 1;
+						}
+					} else if (se2->expr_type == ASN_BASIC_BIT_STRING) {
+						strcpy(elem->type, "asn1.v1.BitString");
+					} else if (se2->expr_type == ASN_BASIC_OBJECT_IDENTIFIER) {
+						strcpy(elem->type, "BasicOid");
+					} else if (se2->expr_type == ASN_BASIC_BOOLEAN) {
+						strcpy(elem->type, "bool");
+					} else if (se2->expr_type == ASN_BASIC_OCTET_STRING) {
+						strcpy(elem->type, "bytes");
+						if (se2->constraints != NULL) {
+							long lowerbound = -1;
+							long upperbound = -1;
+							int extensibility = 0;
+							char *constraint = proto_constraint_print(se2->constraints, APF_BYTES_VALUE, &lowerbound,
+																	  &upperbound, &extensibility);
+							if (extensibility) {
+								elem->tags.sizeExt = 1;
+							}
+							if (lowerbound != -1) {
+								elem->tags.sizeLB = lowerbound;
+							}
+							if (upperbound != -1) {
+								elem->tags.sizeUB = upperbound;
+							}
+							sprintf(elem->rules, "bytes = {%s}", constraint);
+							free(constraint);
+						}
+					} else if (se2->expr_type == ASN_STRING_UTF8String ||
+							   se2->expr_type == ASN_STRING_PrintableString ||
+							   se2->expr_type == ASN_STRING_TeletexString) {
+						strcpy(elem->type, "string");
+						if (se2->constraints != NULL) {
+							long lowerbound = -1;
+							long upperbound = -1;
+							int extensibility = 0;
+							char *constraint = proto_constraint_print(se2->constraints, APF_STRING_VALUE, &lowerbound,
+																	  &upperbound, &extensibility);
+							if (extensibility) {
+								elem->tags.sizeExt = 1;
+							}
+							if (lowerbound != -1) {
+								elem->tags.sizeLB = lowerbound;
+							}
+							if (upperbound != -1) {
+								elem->tags.sizeUB = upperbound;
+							}
+							sprintf(elem->rules, "string = {%s}", constraint);
+							free(constraint);
+						}
+					} else {
+						fprintf(stderr, "unhandled expr_type: %d and meta_type: %d in %s:%s \n",
+								se->expr_type, se->meta_type, expr->Identifier, se->Identifier);
+					}
 				}
 // TODO: Finish this so that it works on 41-int-optional
 //			} else if (se->meta_type == AMT_TYPE && se->expr_type == ASN_CONSTR_SEQUENCE) {
@@ -1482,12 +1551,13 @@ proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags, long *bo
 			*bound = -2147483647;
 			return result;
 		case ATV_MAX:
-			if (flags & 0x100) { // APF_INT32_VALUE
-				*bound = 2147483647;
-				sprintf(out, "%d", INT32_MAX);
-				strcat(result, out);
-				return result;
-			}
+			// no idea why this check is important..
+//			if (flags & 0x100) { // APF_INT32_VALUE
+			*bound = 2147483647;
+			sprintf(out, "%d", INT32_MAX);
+			strcat(result, out);
+			return result;
+//			}
 //		safe_printf("MAX"); return 0;
 			return result;
 		case ATV_FALSE:
