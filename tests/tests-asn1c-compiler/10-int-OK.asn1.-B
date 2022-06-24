@@ -45,14 +45,14 @@ message Delta {
 
 // constant Integer from 10-int-OK.asn1:26
 // {-}
-message CheckGamma {
+message Checkgamma {
     // @inject_tag: aper:"valueLB:1,valueUB:1,"
     int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"];
 };
 
 // constant Integer from 10-int-OK.asn1:27
 // {-}
-message CheckDelta {
+message Checkdelta {
     // @inject_tag: aper:"valueLB:3,valueUB:3,"
     int32 value = 1 [(validate.v1.rules).int32.const = 3, json_name="value"];
 };

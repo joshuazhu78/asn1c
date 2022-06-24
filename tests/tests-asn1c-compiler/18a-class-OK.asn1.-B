@@ -19,7 +19,7 @@ message Pair {
 
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:31
 // {_operator-plus}
-message OperatorPlus {
+message Operatorplus {
     int32 code = 1 [(validate.v1.rules).int32.const = 1, json_name="&code"];
     Pair arg_type = 2 [ json_name="&ArgType"];
     int32 result_type = 3 [ json_name="&ResultType"];
@@ -27,7 +27,7 @@ message OperatorPlus {
 
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:38
 // {_operator-square}
-message OperatorSquare {
+message Operatorsquare {
     int32 code = 1 [(validate.v1.rules).int32.const = 2, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     int32 result_type = 3 [ json_name="&ResultType"];
@@ -35,7 +35,7 @@ message OperatorSquare {
 
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:45
 // {_operator-root}
-message OperatorRoot {
+message Operatorroot {
     int32 code = 1 [(validate.v1.rules).int32.const = 3, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     int32 unused = 3 [ json_name="&Unused"];
@@ -45,8 +45,8 @@ message OperatorRoot {
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:53
 // {_Functions}
 message Functions {
-    OperatorPlus operator_plus = 1 [ json_name="operator_plus"];
-    OperatorSquare operator_square = 2 [ json_name="operator_square"];
-    OperatorRoot operator_root = 3 [ json_name="operator_root"];
+    Operatorplus operator_plus = 1 [ json_name="operator_plus"];
+    Operatorsquare operator_square = 2 [ json_name="operator_square"];
+    Operatorroot operator_root = 3 [ json_name="operator_root"];
 };
 

@@ -91,12 +91,17 @@ toPascalCaseDup(char *mixedCase) {
 	int removed = 0;
 	int lastWasUpper = 0;
 	while (mixedCase[i]) {
-		if (mixedCase[i] == '-' || mixedCase[i] == '&' || mixedCase[i] == '_'
+		if (mixedCase[i] == '&' || mixedCase[i] == '_'
 			|| mixedCase[i] == '{' || mixedCase[i] == '}' || mixedCase[i] == ' ') {
 			pascalCaseDup[i - removed] = toupper(mixedCase[i + 1]);
 			i++;
 			removed++;
 			lastWasUpper = 1;
+		} else if (mixedCase[i] == '-') {
+			pascalCaseDup[i - removed] = mixedCase[i + 1];
+			i++;
+			removed++;
+			lastWasUpper = 0;
 		} else if (i == 0) {
 			pascalCaseDup[i] = toupper(mixedCase[i]);
 			lastWasUpper = 1;
@@ -546,7 +551,16 @@ void proto_print_msg(proto_module_t *proto_module, enum asn1print_flags2 flags, 
 
 	for (int i = 0; i < (int) (proto_module->messages); i++) {
 		proto_msg_t *message = proto_module->message[i];
-		proto_print_single_msg(message, proto_module->message, proto_module->messages, flags, level);
+		int wasPresent = 0;
+		for (int j = 0; j < i; j++) {
+			proto_msg_t *cmpRefMessage = proto_module->message[j];
+			if (strcmp(message->name, cmpRefMessage->name) == 0) {
+				wasPresent = 1;
+			}
+		}
+		if (wasPresent == 0) {
+			proto_print_single_msg(message, proto_module->message, proto_module->messages, flags, level);
+		}
 	}
 
 	if (andfree) {

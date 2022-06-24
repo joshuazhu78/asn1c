@@ -35,14 +35,14 @@ message Struct {
 
 // constant Integer from 14a-resolver-OK.asn1:32
 // {-}
-message CheckAlpha {
+message Checkalpha {
     // @inject_tag: aper:"valueLB:2,valueUB:2,"
     int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"];
 };
 
 // constant Integer from 14a-resolver-OK.asn1:33
 // {-}
-message CheckOther {
+message Checkother {
     // @inject_tag: aper:"valueLB:1,valueUB:1,"
     int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"];
 };

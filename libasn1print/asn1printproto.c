@@ -51,6 +51,11 @@ static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum
 
 static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility);
 
+static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
+								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
+								 proto_enum_t **protoenums, size_t *enums_count,
+								 enum asn1print_flags2 flags, asn1p_t *asn);
+
 static int asn1extract_columns(asn1p_expr_t *expr,
 							   proto_msg_t **proto_msgs, size_t *proto_msg_count,
 							   char *mod_file);
@@ -183,6 +188,43 @@ proto_extract_params(proto_msg_t *msg, asn1p_expr_t *expr) {
 	}
 
 	return params_comments;
+}
+
+// structure_is_extensible function returns 1 if the referred structure can be extended (contains extension flag)
+// or 1, if it doesn't. It also puts 1 in oneofDependent variable, if the structure is of type CHOICE.
+// Iteration over the ASN.1 tree is recursive.
+static int
+structure_is_extensible(asn1p_expr_t *expr, const char *name, int *oneofDependent) {
+	asn1p_expr_t *se;
+	int extensibility = 0;
+
+	if (strcmp(expr->Identifier, name) == 0) {
+		if (expr->expr_type == ASN_CONSTR_CHOICE) {
+			*oneofDependent = 1;
+		}
+		if (TQ_FIRST(&expr->members)) {
+			TQ_FOR(se, &(expr->members), next)
+			{
+				if (se->expr_type == A1TC_EXTENSIBLE) {
+					extensibility = 1;
+					break;
+				}
+			}
+		}
+	} else {
+		if (expr->next.tq_next != NULL) {
+			struct asn1p_expr_s *next = expr->next.tq_next;
+			int isExtensible = 0;
+			int oneof = 0;
+			isExtensible = structure_is_extensible(next, name, &oneof);
+			if (isExtensible) {
+				*oneofDependent = oneof;
+				return isExtensible;
+			}
+		}
+	}
+
+	return extensibility;
 }
 
 static int
@@ -332,6 +374,452 @@ get_upperbound(const asn1p_constraint_t *ct) {
 	}
 
 	return result;
+}
+
+static int
+add_message_from_expression(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *asntree, asn1p_module_t *mod,
+							proto_msg_t **message, size_t *messages, proto_enum_t **protoenum, size_t *enums,
+							enum asn1print_flags2 flags, asn1p_t *asn) {
+	if (!expr->Identifier) return 1;
+
+	if (expr->expr_type == ASN_BASIC_ENUMERATED) {
+		proto_enum_t *newenum = proto_create_enum(msgName,
+												  "enumerated from %s:%d", mod->source_file_name, expr->_lineno);
+		proto_process_enumerated(expr, &newenum);
+		proto_enums_add_enum(protoenum, enums, newenum);
+
+	} else if (expr->meta_type == AMT_VALUE) {
+		proto_msg_t *msg;
+		proto_msg_def_t *msgelem;
+		switch (expr->expr_type) {
+			case ASN_BASIC_INTEGER:
+				msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+										   "constant Integer from %s:%d", mod->source_file_name, expr->_lineno, 1);
+				msgelem = proto_create_msg_elem("value", "int32", NULL);
+				if ((long) expr->value->value.v_integer > 2147483647 ||
+					(long) expr->value->value.v_integer < -2147483647) {
+					sprintf(msgelem->rules, "int64.const = %ld", (long) expr->value->value.v_integer);
+					strcpy(msgelem->type, "int64");
+					msgelem->tags.valueLB = (long) expr->value->value.v_integer;
+					msgelem->tags.valueUB = (long) expr->value->value.v_integer;
+				} else {
+					sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
+					msgelem->tags.valueLB = (int) expr->value->value.v_integer;
+					msgelem->tags.valueUB = (int) expr->value->value.v_integer;
+				}
+				// ToDo - this should add a non-zero value to the unique tag (used in E2AP), but it doesn't. Figure out why.
+				msgelem->tags.unique = (int) expr->unique;
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+
+				return 0;
+			case ASN_BASIC_RELATIVE_OID:
+				msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+										   "constant Basic OID from %s:%d", mod->source_file_name, expr->_lineno, 1);
+				msgelem = proto_create_msg_elem("value", "string", NULL);
+				sprintf(msgelem->rules, "string.const = '%s'", asn1f_printable_value(expr->value));
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+
+				break;
+			case ASN_BASIC_OCTET_STRING:
+				msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+										   "constant Basic OCTET STRING from %s:%d", mod->source_file_name,
+										   expr->_lineno, 1);
+				msgelem = proto_create_msg_elem("value", "bytes", NULL);
+				char *byte_string = NULL;
+				switch (expr->value->type) {
+					case ATV_BITVECTOR:
+						byte_string = format_bit_vector_const(expr->value);
+						break;
+					default:
+						fprintf(stderr, "Unhandled conversion of OCTET_STRING const from type %d", expr->value->type);
+				}
+				sprintf(msgelem->rules, "bytes.const = '%s'", byte_string);
+				free((void *) byte_string);
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+
+				break;
+			case A1TC_REFERENCE:
+				msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+										   "reference from %s:%d", mod->source_file_name, expr->_lineno, 0);
+				msgelem = proto_create_msg_elem("value", "int32", NULL);
+
+				for (size_t cc = 0; cc < expr->reference->comp_count; cc++) {
+					if (cc) strcat(msgelem->comments, ".");
+					strcat(msgelem->comments, expr->reference->components[cc].name);
+				}
+
+				switch (expr->value->type) {
+					case ATV_INTEGER: // INTEGER
+						if ((long) expr->value->value.v_integer > 2147483647 ||
+							(long) expr->value->value.v_integer < -2147483647) {
+							sprintf(msgelem->rules, "int64.const = %ld", (long) expr->value->value.v_integer);
+							strcpy(msgelem->type, "int64");
+							msgelem->tags.valueLB = (long) expr->value->value.v_integer;
+							msgelem->tags.valueUB = (long) expr->value->value.v_integer;
+
+						} else {
+							sprintf(msgelem->rules, "int32.const = %d", (int) expr->value->value.v_integer);
+							msgelem->tags.valueLB = (int) expr->value->value.v_integer;
+							msgelem->tags.valueUB = (int) expr->value->value.v_integer;
+						}
+						proto_msg_add_elem(msg, msgelem);
+						proto_messages_add_msg(message, messages, msg);
+						return 0;
+					case ATV_STRING:
+						strcpy(msgelem->type, "string");
+						char *escaped = escapeQuotesDup((char *) expr->value->value.string.buf);
+						snprintf(msgelem->rules, 100, "string.const = \"%s\"", escaped);
+						free(escaped);
+						proto_msg_add_elem(msg, msgelem);
+						proto_messages_add_msg(message, messages, msg);
+						return 0;
+					case ATV_UNPARSED:
+						if (expr->ioc_table != NULL) {
+							asn1extract_columns(expr, message, messages, mod->source_file_name);
+						}
+						break;
+					default:
+						fprintf(stderr, "// Error. AMT_VALUE with ExprType: %d\n", expr->value->type);
+				}
+
+				return 0;
+			default:
+				fprintf(stderr, "ERROR: unhandled expr->expr_type %d\n", expr->expr_type);
+				return -1;
+		}
+	} else if (expr->expr_type == ASN_BASIC_INTEGER && expr->meta_type == AMT_VALUESET) {
+		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+												"range of Integer from %s:%d", mod->source_file_name, expr->_lineno, 0);
+		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
+		long lowerbound = -1;
+		long upperbound = -1;
+		int extensibility = 0;
+		char *constraints = proto_constraint_print(expr->constraints, flags, &lowerbound, &upperbound, &extensibility);
+		if (lowerbound != -1) {
+			msgelem->tags.valueLB = lowerbound;
+		}
+		if (upperbound != -1) {
+			msgelem->tags.valueUB = upperbound;
+		}
+		if (extensibility) {
+			msgelem->tags.valueExt = 1;
+		}
+		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
+		free(constraints);
+		proto_msg_add_elem(msg, msgelem);
+		proto_messages_add_msg(message, messages, msg);
+
+		return 0;
+	} else if (expr->meta_type == AMT_TYPE &&
+			   expr->expr_type != ASN_CONSTR_SEQUENCE &&
+			   expr->expr_type != ASN_CONSTR_SEQUENCE_OF &&
+			   expr->expr_type != ASN_CONSTR_CHOICE) {
+		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+												"range of Integer from %s:%d", mod->source_file_name, expr->_lineno, 0);
+		if (expr->lhs_params != NULL) {
+			char *param_comments = proto_extract_params(msg, expr);
+			strcat(msg->comments, param_comments);
+			free(param_comments);
+		}
+
+		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
+
+		switch (expr->expr_type) {
+			case ASN_BASIC_INTEGER:
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound = -1;
+					long upperbound = -1;
+					int extensibility = 0;
+					char *constraints = proto_constraint_print(expr->constraints, flags | APF_INT32_VALUE, &lowerbound,
+															   &upperbound, &extensibility);
+					if (extensibility) {
+						msgelem->tags.valueExt = 1;
+					}
+					if (lowerbound != -1) {
+						msgelem->tags.valueLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.valueUB = upperbound;
+					}
+					if (lowerbound < -2147483647 || upperbound > 2147483647) {
+						sprintf(msgelem->rules, "int64 = {%s}", constraints);
+						strcpy(msgelem->type, "int64");
+					} else {
+						sprintf(msgelem->rules, "int32 = {%s}", constraints);
+					}
+					free(constraints);
+					// TODO: Find why 07 test does not show Reason values
+				}
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			case ASN_STRING_IA5String:
+			case ASN_STRING_BMPString:
+				strcpy(msgelem->type, "string");
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound = -1;
+					long upperbound = -1;
+					int extensibility = 0;
+					char *constraints = proto_constraint_print(expr->constraints, flags | APF_STRING_VALUE, &lowerbound,
+															   &upperbound, &extensibility);
+					if (extensibility) {
+						msgelem->tags.sizeExt = 1;
+					}
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					sprintf(msgelem->rules, "string = {%s}", constraints);
+					free(constraints);
+				}
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			case ASN_BASIC_BOOLEAN:
+				strcpy(msgelem->type, "bool");
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			case ASN_BASIC_BIT_STRING:
+				strcpy(msgelem->type, "asn1.v1.BitString");
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound;
+					lowerbound = get_lowerbound(expr->constraints);
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					// obtaining upperbound
+					long upperbound;
+					upperbound = get_upperbound(expr->constraints);
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					int extensibility;
+					extensibility = get_extensibility(expr->constraints);
+					if (extensibility) {
+						msgelem->tags.sizeExt = 1;
+					}
+				}
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			case ASN_BASIC_OCTET_STRING:
+				strcpy(msgelem->type, "bytes");
+				// adding constraints
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound = -1;
+					long upperbound = -1;
+					int extensibility = 0;
+					char *constraint = proto_constraint_print(expr->constraints, APF_BYTES_VALUE, &lowerbound,
+															  &upperbound, &extensibility);
+					if (extensibility) {
+						msgelem->tags.sizeExt = 1;
+					}
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					sprintf(msgelem->rules, "bytes = {%s}", constraint);
+					free(constraint);
+				}
+
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			case ASN_STRING_PrintableString:
+				strcpy(msgelem->type, "string");
+				// adding constraints
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound = -1;
+					long upperbound = -1;
+					int extensibility = 0;
+					char *constraint = proto_constraint_print(expr->constraints, APF_STRING_VALUE, &lowerbound,
+															  &upperbound, &extensibility);
+					if (extensibility) {
+						msgelem->tags.sizeExt = 1;
+					}
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					sprintf(msgelem->rules, "string = {%s}", constraint);
+					free(constraint);
+				}
+
+				proto_msg_add_elem(msg, msgelem);
+				proto_messages_add_msg(message, messages, msg);
+				return 0;
+			default:
+				// by default storing tags for sizeLB and sizeUB
+				if (expr->constraints != NULL) {
+					// adding APER tags
+					long lowerbound;
+					lowerbound = get_lowerbound(expr->constraints);
+					if (lowerbound != -1) {
+						msgelem->tags.sizeLB = lowerbound;
+					}
+					// obtaining upperbound
+					long upperbound;
+					upperbound = get_upperbound(expr->constraints);
+					if (upperbound != -1) {
+						msgelem->tags.sizeUB = upperbound;
+					}
+					int extensibility;
+					extensibility = get_extensibility(expr->constraints);
+					if (extensibility) {
+						msgelem->tags.sizeExt = 1;
+					}
+				}
+				// adding message elements to the message itself
+				proto_msg_add_elem(msg, msgelem);
+				// adding message to the Protobuf tree
+				proto_messages_add_msg(message, messages, msg);
+
+				// to indicate that we've hit something unexpected
+				fprintf(stderr, "unhandled expr_type: %d and meta_type: %d\n", expr->expr_type, expr->meta_type);
+				return 0;
+		}
+		return 0;
+	} else if (expr->meta_type == AMT_TYPE &&
+			   (expr->expr_type == ASN_CONSTR_SEQUENCE ||
+				expr->expr_type == ASN_CONSTR_SEQUENCE_OF)) {
+		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+												"sequence from %s:%d", mod->source_file_name, expr->_lineno, 0);
+		if (expr->lhs_params != NULL) {
+			char *param_comments = proto_extract_params(msg, expr);
+			strcat(msg->comments, param_comments);
+			free(param_comments);
+		}
+
+		int extensibility = 0;
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility);
+		if (extensibility) {
+			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
+		}
+
+		proto_messages_add_msg(message, messages, msg);
+
+	} else if (expr->meta_type == AMT_TYPE && expr->expr_type == ASN_CONSTR_CHOICE) {
+		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+												"sequence from %s:%d", mod->source_file_name, expr->_lineno, 0);
+
+		// TODO: Determine if comments should belong to the oneof or to the parent message.
+		if (expr->lhs_params != NULL) {
+			char *param_comments = proto_extract_params(msg, expr);
+			strcat(msg->comments, param_comments);
+			free(param_comments);
+		}
+
+		proto_msg_oneof_t *oneof = proto_create_msg_oneof(msgName,
+														  "choice from %s:%d", mod->source_file_name, expr->_lineno);
+		proto_msg_add_oneof(msg, oneof);
+
+		int extensibility = 0;
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility);
+		if (extensibility) {
+			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
+		}
+
+		proto_messages_add_msg(message, messages, msg);
+
+	} else if (expr->meta_type == AMT_TYPEREF) {
+		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
+												"reference from %s:%d", mod->source_file_name, expr->_lineno, 0);
+		if (expr->lhs_params != NULL) {
+			char *param_comments = proto_extract_params(msg, expr);
+			strcat(msg->comments, param_comments);
+			free(param_comments);
+		}
+
+		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
+
+		if (expr->reference->comp_count >= 1) {
+			asn1p_expr_t *refElem;
+			refElem = WITH_MODULE_NAMESPACE(expr->module, expr_ns, asn1f_find_terminal_type_ex(asn, expr_ns, expr));
+			sprintf(msgelem->type, "%s%03d", refElem->Identifier, refElem->_type_unique_index);
+			if (asntree != NULL) {
+				// extract message first
+				int res = 0;
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				// now add this message to the message tree
+				if (res) {
+					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
+							refElem->Identifier, refElem->meta_type, refElem->expr_type);
+				}
+			} else {
+				// extract message first and then
+				int res = 0;
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				// now add this message to the message tree
+				if (res) {
+					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
+							refElem->Identifier, refElem->meta_type, refElem->expr_type);
+				}
+			}
+		}
+
+		// checking if the structure is extensible
+		int isExtensible = 0;
+		int oneofDependent = 0;
+		isExtensible = structure_is_extensible(asntree, expr->reference->components->name, &oneofDependent);
+		if (isExtensible == 1 && oneofDependent == 0) {
+			msgelem->tags.valueExt = 1;
+		} else if (isExtensible == 1 && oneofDependent == 1) {
+			msgelem->tags.choiceExt = 1;
+		}
+
+		proto_msg_add_elem(msg, msgelem);
+
+		proto_messages_add_msg(message, messages, msg);
+		return 0;
+
+	} else if (expr->meta_type == AMT_VALUESET && expr->expr_type == A1TC_REFERENCE) {
+		char refname[PROTO_NAME_CHARS] = {};
+		if (expr->reference && expr->reference->comp_count > 0) {
+			strcpy(refname, expr->reference->components[0].name);
+		}
+		asn1extract_columns(expr, message, messages, mod->source_file_name);
+		return 0;
+	} else {
+		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
+				expr->Identifier, expr->meta_type, expr->expr_type);
+	}
+	return 0;
+}
+
+static int
+proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
+								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
+								 proto_enum_t **protoenums, size_t *enums_count,
+								 enum asn1print_flags2 flags, asn1p_t *asn) {
+	int res = 0;
+
+	if (strcmp(expr->Identifier, refName) == 0) {
+		// Creating and add a message
+		res = add_message_from_expression(refName, msgName, expr, tree, mod, messages, message_count, protoenums, enums_count, flags, asn);
+		return res;
+	} else {
+		if (expr->next.tq_next != NULL) {
+			res = proto_extract_referenced_message(refName, msgName, expr->next.tq_next, tree, mod, messages, message_count, protoenums, enums_count, flags, asn);
+			return res;
+		}
+	}
+
+	return res;
 }
 
 int
@@ -681,7 +1169,12 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			free(param_comments);
 		}
 
-		struct asn1p_expr_s *asntree;
+		// verifying that it is extra call to add referenced type
+		if (flags & APF_REFERENCED_TYPE) {
+			sprintf(msg->name, "%s%03d", expr->Identifier, expr->_type_unique_index);
+		}
+
+		struct asn1p_expr_s *asntree = NULL;
 		if (asn->modules.tq_head != NULL) {
 			if (asn->modules.tq_head->members.tq_head != NULL) {
 				asntree = asn->modules.tq_head->members.tq_head;
@@ -711,7 +1204,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 														  "choice from %s:%d", mod->source_file_name, expr->_lineno);
 		proto_msg_add_oneof(msg, oneof);
 
-		struct asn1p_expr_s *asntree;
+		struct asn1p_expr_s *asntree = NULL;
 		if (asn->modules.tq_head != NULL) {
 			if (asn->modules.tq_head->members.tq_head != NULL) {
 				asntree = asn->modules.tq_head->members.tq_head;
@@ -740,12 +1233,56 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			free(param_comments);
 		}
 
+		struct asn1p_expr_s *asntree = NULL;
+		if (asn->modules.tq_head != NULL) {
+			if (asn->modules.tq_head->members.tq_head != NULL) {
+				asntree = asn->modules.tq_head->members.tq_head;
+			}
+		}
+
 		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
+
 		if (expr->reference->comp_count >= 1) {
 			asn1p_expr_t *refElem;
 			refElem = WITH_MODULE_NAMESPACE(expr->module, expr_ns, asn1f_find_terminal_type_ex(asn, expr_ns, expr));
 			sprintf(msgelem->type, "%s%03d", refElem->Identifier, refElem->_type_unique_index);
+			if (asntree != NULL) {
+				// extract message first
+				int res = 0;
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				// now add this message to the message tree
+				if (res) {
+					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
+							refElem->Identifier, msgelem->type, refElem->meta_type, refElem->expr_type);
+				}
+			} else {
+				// extract message first and then
+				int res = 0;
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, expr, expr, mod, message, messages, protoenum, enums, flags, asn);
+				// now add this message to the message tree
+				if (res) {
+					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
+							refElem->Identifier, msgelem->type, refElem->meta_type, refElem->expr_type);
+				}
+			}
 		}
+
+		// checking if the structure is extensible
+		int isExtensible = 0;
+		int oneofDependent = 0;
+		if (asntree != NULL) {
+			// iterating over the whole tree
+			isExtensible = structure_is_extensible(asntree, expr->reference->components->name, &oneofDependent);
+		} else {
+			// backup option - iterating over what's left
+			isExtensible = structure_is_extensible(expr, expr->reference->components->name, &oneofDependent);
+		}
+		if (isExtensible == 1 && oneofDependent == 0) {
+			msgelem->tags.valueExt = 1;
+		} else if (isExtensible == 1 && oneofDependent == 1) {
+			msgelem->tags.choiceExt = 1;
+		}
+
 		proto_msg_add_elem(msg, msgelem);
 
 		proto_messages_add_msg(message, messages, msg);
@@ -779,43 +1316,6 @@ proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum) {
 		}
 	}
 	return 0;
-}
-
-// structure_is_extensible function returns 1 if the referred structure can be extended (contains extension flag)
-// or 1, if it doesn't. It also puts 1 in oneofDependent variable, if the structure is of type CHOICE.
-// Iteration over the ASN.1 tree is recursive.
-static int
-structure_is_extensible(asn1p_expr_t *expr, const char *name, int *oneofDependent) {
-	asn1p_expr_t *se;
-	int extensibility = 0;
-
-	if (strcmp(expr->Identifier, name) == 0) {
-		if (expr->expr_type == ASN_CONSTR_CHOICE) {
-			*oneofDependent = 1;
-		}
-		if (TQ_FIRST(&expr->members)) {
-			TQ_FOR(se, &(expr->members), next)
-			{
-				if (se->expr_type == A1TC_EXTENSIBLE) {
-					extensibility = 1;
-					break;
-				}
-			}
-		}
-	} else {
-		if (expr->next.tq_next != NULL) {
-			struct asn1p_expr_s *next = expr->next.tq_next;
-			int isExtensible = 0;
-			int oneof = 0;
-			isExtensible = structure_is_extensible(next, name, &oneof);
-			if (isExtensible) {
-				*oneofDependent = oneof;
-				return isExtensible;
-			}
-		}
-	}
-
-	return extensibility;
 }
 
 // is_enum function verifies if the parsed structure is enumerator or not.

@@ -27,14 +27,14 @@ message Alpha2 {
 
 // constant Integer from 13a-resolver-OK.asn1:29
 // {-}
-message CheckAlpha {
+message Checkalpha {
     // @inject_tag: aper:"valueLB:123,valueUB:123,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123, json_name="value"];
 };
 
 // constant Integer from 13a-resolver-OK.asn1:30
 // {-}
-message CheckAlpha2 {
+message Checkalpha2 {
     // @inject_tag: aper:"valueLB:123,valueUB:123,"
     int32 value = 1 [(validate.v1.rules).int32.const = 123, json_name="value"];
 };

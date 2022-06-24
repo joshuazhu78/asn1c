@@ -10,12 +10,39 @@ option go_package = "pkg164_pseudo_self_reference_ok_asn1/v1/modulelapstorage";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
-// sequence from 164-pseudo-self-reference-OK.asn1:20
+// sequence from 164-pseudo-self-reference-OK.asn1:17
+// @inject_tag: aper:"valueExt"
+// {Reference-Structure001}
+message ReferenceStructure001 {
+    // @inject_tag: aper:"valueExt,valueLB:1,valueUB:32,sizeLB:0,sizeUB:2147483647,"
+    repeated int32 list1 = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list1"];
+    bool item = 2 [ json_name="item"];
+    // @inject_tag: aper:"sizeLB:0,sizeUB:2147483647,fromValueExt,"
+    repeated string list2 = 3 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list2"];
+};
+
+// reference from 164-pseudo-self-reference-OK.asn1:16
+// {Reference-structure}
+message Referencestructure {
+    // @inject_tag: aper:"valueExt,"
+    ReferenceStructure001 value = 1 [ json_name="value"];
+};
+
+// sequence from 164-pseudo-self-reference-OK.asn1:17
 // @inject_tag: aper:"valueExt"
 // {Reference-Structure}
 message ReferenceStructure {
     // @inject_tag: aper:"valueExt,valueLB:1,valueUB:32,sizeLB:0,sizeUB:2147483647,"
-    repeated int32 list = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list"];
+    repeated int32 list1 = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list1"];
     bool item = 2 [ json_name="item"];
+    // @inject_tag: aper:"sizeLB:0,sizeUB:2147483647,fromValueExt,"
+    repeated string list2 = 3 [(validate.v1.rules).repeated = {min_items: 0, max_items: 2147483647}, json_name="list2"];
+};
+
+// sequence from 164-pseudo-self-reference-OK.asn1:24
+// @inject_tag: aper:"valueExt"
+// {LogLine}
+message LogLine {
+    Referencestructure ie = 1 [ json_name="ie"];
 };
 

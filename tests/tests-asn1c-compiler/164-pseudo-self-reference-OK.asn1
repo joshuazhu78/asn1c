@@ -11,17 +11,18 @@ ModuleLAPStorage
 	DEFINITIONS EXTENSIBILITY IMPLIED ::=
 BEGIN
 
---	LogLine ::= SEQUENCE {
---        ie  Reference-structure,
---        ...
---	}
+	Reference-structure ::= Reference-Structure
 
 	Reference-Structure ::= SEQUENCE {
-		list		SEQUENCE SIZE(0..MAX) OF INTEGER(1..32,...),
+		list1		SEQUENCE SIZE(0..MAX) OF INTEGER(1..32,...),
 		item	    BOOLEAN,
-		...
+		...,
+		list2		SEQUENCE SIZE(0..MAX) OF PrintableString
 	}
 
---	Reference-structure ::= Reference-Structure
+	LogLine ::= SEQUENCE {
+        ie  Reference-structure,
+        ...
+	}
 
 END

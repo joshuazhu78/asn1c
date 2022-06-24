@@ -31,7 +31,7 @@ message Ds1 {
 
 // constant Integer from 58-param-OK.asn1:21
 // {-}
-message UbName {
+message Ubname {
     // @inject_tag: aper:"valueLB:128,valueUB:128,"
     int32 value = 1 [(validate.v1.rules).int32.const = 128, json_name="value"];
 };

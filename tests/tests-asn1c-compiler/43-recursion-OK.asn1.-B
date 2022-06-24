@@ -12,12 +12,12 @@ import "asn1/v1/asn1.proto";
 
 // sequence from 43-recursion-OK.asn1:15
 // {Test-structure-1}
-message TestStructure1 {
+message Teststructure1 {
     int32 t_member1 = 1 [ json_name="t-member1"];
     // @inject_tag: aper:""
-    repeated TestStructure1 t_member2 = 2 [ json_name="t-member2"];
+    repeated Teststructure1 t_member2 = 2 [ json_name="t-member2"];
     // @inject_tag: aper:"optional,"
-    optional TestStructure1 t_member3 = 3 [ json_name="t-member3"];
+    optional Teststructure1 t_member3 = 3 [ json_name="t-member3"];
     int32 t_member4 = 4 [ json_name="t-member4"];
 };
 
@@ -39,13 +39,13 @@ message Choice1 {
 
 // range of Integer from 43-recursion-OK.asn1:28
 // {Test-structure-2}
-message TestStructure2 {
+message Teststructure2 {
     int32 value = 1 [ json_name="value"];
 };
 
 // range of Integer from 43-recursion-OK.asn1:29
 // {Test-structure-3}
-message TestStructure3 {
+message Teststructure3 {
     int32 value = 1 [ json_name="value"];
 };
 
