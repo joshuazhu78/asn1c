@@ -49,7 +49,7 @@ static char *proto_value_print(const asn1p_value_t *val, enum asn1print_flags fl
 
 static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum);
 
-static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree);
+static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility);
 
 static int asn1extract_columns(asn1p_expr_t *expr,
 							   proto_msg_t **proto_msgs, size_t *proto_msg_count,
@@ -688,7 +688,11 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			}
 		}
 
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree);
+		int extensibility = 0;
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility);
+		if (extensibility) {
+			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
+		}
 
 		proto_messages_add_msg(message, messages, msg);
 
@@ -714,7 +718,12 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			}
 		}
 
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree);
+		int extensibility = 0;
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility);
+
+		if (extensibility) {
+			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
+		}
 
 		proto_messages_add_msg(message, messages, msg);
 
@@ -846,7 +855,7 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 }
 
 static int
-proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree) {
+proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -1072,7 +1081,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 //						strcpy(elem->type, comp->name);
 //					}
 //				} else if (se2->meta_type == AMT_TYPE) {
-//					proto_process_children(se, msgdef, 0, 0, asntree);
+//					proto_process_children(se, msgdef, 0, 0, asntree, NULL);
 //					fprintf(stderr, "recursing expr_type: %d and meta_type: %d in %s:%s \n",
 //							se2->expr_type, se2->meta_type, se->Identifier, se2->Identifier);
 //				} else {
@@ -1157,6 +1166,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 			}
 			if (se->expr_type == A1TC_EXTENSIBLE) {
 				extensible = 1;
+				*extensibility = 1;
 				continue;
 			} else if (se->expr_type == A1TC_REFERENCE) {
 			} else if (se->Identifier) {

@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 159-optional-items-OK.asn1:15
+// @inject_tag: aper:"valueExt"
 // {PDU}
 message Pdu {
     // @inject_tag: aper:"optional,sizeLB:1,sizeUB:123456,"

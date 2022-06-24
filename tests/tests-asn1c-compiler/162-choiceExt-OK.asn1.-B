@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 162-choiceExt-OK.asn1:15
+// @inject_tag: aper:"valueExt"
 // {Item2}
 message Item2 {
     // @inject_tag: aper:"choiceExt,"
@@ -18,6 +19,7 @@ message Item2 {
 };
 
 // sequence from 162-choiceExt-OK.asn1:20
+// @inject_tag: aper:"choiceExt"
 // {Item1}
 message Item1 {
     // choice from 162-choiceExt-OK.asn1:20

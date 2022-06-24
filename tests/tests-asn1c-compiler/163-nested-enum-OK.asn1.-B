@@ -22,6 +22,7 @@ enum Item1 {
 };
 
 // sequence from 163-nested-enum-OK.asn1:15
+// @inject_tag: aper:"valueExt"
 // {Item2}
 message Item2 {
     // @inject_tag: aper:"valueExt,valueLB:0,valueUB:3,"
@@ -29,6 +30,7 @@ message Item2 {
 };
 
 // sequence from 163-nested-enum-OK.asn1:31
+// @inject_tag: aper:"choiceExt"
 // {Item3}
 message Item3 {
     // choice from 163-nested-enum-OK.asn1:31

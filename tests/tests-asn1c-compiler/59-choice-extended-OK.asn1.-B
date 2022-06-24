@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 59-choice-extended-OK.asn1:15
+// @inject_tag: aper:"choiceExt"
 // {Choice}
 message Choice {
     // choice from 59-choice-extended-OK.asn1:15

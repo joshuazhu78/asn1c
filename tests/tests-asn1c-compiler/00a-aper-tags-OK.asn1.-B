@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 00a-aper-tags-OK.asn1:15
+// @inject_tag: aper:"valueExt"
 // {Some-List}
 message SomeList {
     // @inject_tag: aper:"optional,sizeLB:1,sizeUB:123456,"

@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 164-pseudo-self-reference-OK.asn1:20
+// @inject_tag: aper:"valueExt"
 // {Reference-Structure}
 message ReferenceStructure {
     // @inject_tag: aper:"valueExt,valueLB:1,valueUB:32,sizeLB:0,sizeUB:2147483647,"

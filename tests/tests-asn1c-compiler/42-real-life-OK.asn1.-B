@@ -11,6 +11,7 @@ import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
 // sequence from 42-real-life-OK.asn1:23
+// @inject_tag: aper:"valueExt"
 // {LogLine}
 message LogLine {
     int32 line_digest = 1 [ json_name="line-digest"];
@@ -19,6 +20,7 @@ message LogLine {
 };
 
 // sequence from 42-real-life-OK.asn1:33
+// @inject_tag: aper:"valueExt"
 // {VariablePartSet}
 message VariablePartSet {
     // @inject_tag: aper:"sizeLB:0,sizeUB:2147483647,"
@@ -28,6 +30,7 @@ message VariablePartSet {
 };
 
 // sequence from 42-real-life-OK.asn1:42
+// @inject_tag: aper:"choiceExt"
 // {VariablePart}
 message VariablePart {
     // choice from 42-real-life-OK.asn1:42
@@ -40,6 +43,7 @@ message VariablePart {
 };
 
 // sequence from 42-real-life-OK.asn1:59
+// @inject_tag: aper:"valueExt"
 // {ActionItem}
 message ActionItem {
     int32 accept_as = 1 [ json_name="accept-as"];

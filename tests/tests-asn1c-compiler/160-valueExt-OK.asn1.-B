@@ -18,6 +18,7 @@ message T2 {
 };
 
 // sequence from 160-valueExt-OK.asn1:19
+// @inject_tag: aper:"valueExt"
 // {T1}
 message T1 {
     // @inject_tag: aper:"optional,sizeExt,sizeLB:1,sizeUB:16,"
