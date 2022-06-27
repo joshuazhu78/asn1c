@@ -1,0 +1,18 @@
+
+-- OK: Everything is fine
+
+-- iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
+-- .smth.e2.version3.e2sm (9363.1.5.1)
+-- .165
+
+E2SM-SMTH-IEs
+{ iso(51) org(3) dod(6) internet(1) private(4) enterprise(1) smth(53148) e2(1) version3(3) e2sm(2) e2sm-SMTH-IEs (165) }
+	DEFINITIONS EXTENSIBILITY IMPLIED ::=
+BEGIN
+
+	LogLine ::= SEQUENCE {
+        ...,
+        ie  PrintableString(SIZE(1..150,...))
+	}
+
+END

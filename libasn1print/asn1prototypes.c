@@ -20,6 +20,47 @@
 
 #include "asn1prototypes.h"
 
+// get_version() parses version of the ASN.1 definition, if present, from the OID.
+// It returns -1 if version was not found
+int get_version(asn1p_oid_t *oid) {
+
+	int vrsn = -1;
+
+	for (int i = 0; i < oid->arcs_count; i++) {
+		asn1p_oid_arc_t arc = oid->arcs[i];
+		if (arc.name != NULL) { // sometimes it can occur, that there is only number, but not the name - it may break this algorithm
+			if (strstr(arc.name, "version")) {
+				vrsn = arc.number;
+				break;
+			}
+		}
+	}
+
+	return vrsn;
+}
+
+// get_protobuf_package_name() adjusts module name to correspond to Go convention for the package naming
+// (i.e., no dashes, no underscore, no mixed case)
+char *
+get_protobuf_package_name(char *name) {
+	// Exclude underscores and dashes from the name of the package
+	int j = 0;
+	int i = 0;
+	char *res = strdup(name);
+	int origlen = strlen(name);
+	while (j < origlen) {
+		if (name[i] == '_' || name[i] == '-') {
+			j--;
+		} else {
+			res[j] = name[i];
+		}
+		i++;
+		j++;
+	}
+
+	return res;
+}
+
 char *
 proto_remove_rel_path(char *path) {
 	int count = 0;

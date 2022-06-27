@@ -1,0 +1,20 @@
+////////////////////// e2sm-smth-ies.proto //////////////////////
+// Protobuf generated from /165-o-ran-oid-OK.asn1 by asn1c-0.9.29
+// E2SM-SMTH-IEs { iso(51) org(3) dod(6) internet(1) private(4) enterprise(1) smth(53148) e2(1) version3(3) e2sm(2) e2sm-SMTH-IEs(165) }
+
+syntax = "proto3";
+
+package pkg165_o_ran_oid_ok.v3;
+option go_package = "pkg165_o_ran_oid_ok/v3/e2sm-smth-ies;e2smsmthiesv3";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+
+// sequence from 165-o-ran-oid-OK.asn1:14
+// @inject_tag: aper:"valueExt"
+// {LogLine}
+message LogLine {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:150,fromValueExt,"
+    string ie = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="ie"];
+};
+

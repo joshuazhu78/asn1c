@@ -184,6 +184,9 @@ toSnakeCaseDup(const char *mixedCase, const snake_case_e tocase) {
 		if (snakeCase[i] == '_' && snakeCase[i + 1] == '_') {
 			noDuplicatesSnakeCase[j] = snakeCase[i + 1];
 			i++;
+		} else if (snakeCase[i] == '_' && snakeCase[i + 1] == 'a' &&
+		snakeCase[i + 2] == 's' && snakeCase[i + 3] == 'n' && snakeCase[i + 4] == '1') { // removing "_asn1" pattern from the name
+			i = i + 4;
 		} else {
 			noDuplicatesSnakeCase[j] = snakeCase[i];
 		}
@@ -191,8 +194,13 @@ toSnakeCaseDup(const char *mixedCase, const snake_case_e tocase) {
 		j++;
 	}
 
+	// removing "_" from the end of a string
+	int length = strlen(noDuplicatesSnakeCase);
+	if (noDuplicatesSnakeCase[length-1] == '_') {
+		noDuplicatesSnakeCase[length-1] = '\0';
+	}
+
 	return noDuplicatesSnakeCase;
-//	return snakeCase;
 }
 
 static int
@@ -504,18 +512,34 @@ void proto_print_msg(proto_module_t *proto_module, enum asn1print_flags2 flags, 
 
 	safe_printf("\nsyntax = \"proto3\";\n\n");
 
+	int version = -1;
+	if (proto_module->oid != NULL) {
+		version = get_version(proto_module->oid);
+	}
+	char *protobufPackageNameLc = get_protobuf_package_name(moduleNameLc);
+
+	// ToDo - include github.com/onosproject/onos-e2-sm/servicemodels/ in the go_package path..
 	char *srcNoRelPath = proto_remove_rel_path(proto_module->srcfilename);
-	// ToDo - exclude "_asn1" from the package name
 	char *sourceFileSc = toSnakeCaseDup(srcNoRelPath, SNAKECASE_LOWER);
-	// ToDo - parse version of the SM from the OID and include it in the package and go_package definitions
-	if (startNotLcLetter(sourceFileSc) == 0) {
-		safe_printf("package %s.v1;\n", sourceFileSc);
-		safe_printf("option go_package = \"%s/v1/%s\";\n\n", sourceFileSc, moduleNameLc);
+	if (version != -1) {
+		if (startNotLcLetter(sourceFileSc) == 0) {
+			safe_printf("package %s.v%d;\n", sourceFileSc, version);
+			safe_printf("option go_package = \"%s/v%d/%s;%sv%d\";\n\n", sourceFileSc, version, moduleNameLc, protobufPackageNameLc, version);
+		} else {
+			safe_printf("package pkg%s.v%d;\n", sourceFileSc, version);
+			safe_printf("option go_package = \"pkg%s/v%d/%s;%sv%d\";\n\n", sourceFileSc, version, moduleNameLc, protobufPackageNameLc, version);
+		}
 	} else {
-		safe_printf("package pkg%s.v1;\n", sourceFileSc);
-		safe_printf("option go_package = \"pkg%s/v1/%s\";\n\n", sourceFileSc, moduleNameLc);
+		if (startNotLcLetter(sourceFileSc) == 0) {
+			safe_printf("package %s.v1;\n", sourceFileSc);
+			safe_printf("option go_package = \"%s/v1/%s;%s\";\n\n", sourceFileSc, moduleNameLc, protobufPackageNameLc);
+		} else {
+			safe_printf("package pkg%s.v1;\n", sourceFileSc);
+			safe_printf("option go_package = \"pkg%s/v1/%s;%s\";\n\n", sourceFileSc, moduleNameLc, protobufPackageNameLc);
+		}
 	}
 	free(moduleNameLc);
+	free(protobufPackageNameLc);
 
 	for (int i = 0; i < (int) (proto_module->imports); i++) {
 		proto_import_t **proto_import = proto_module->import;

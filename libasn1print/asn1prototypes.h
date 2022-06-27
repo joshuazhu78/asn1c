@@ -141,5 +141,7 @@ proto_import_t *proto_create_import(const char *path, asn1p_oid_t *oid);
 char *proto_remove_rel_path(char *path);
 char *proto_remove_whole_path(char *path);
 long tags_sum(proto_tags_t tags);
+int get_version(asn1p_oid_t *oid);
+char *get_protobuf_package_name(char *name);
 
 #endif /* LIBASN1PRINT_ASN1PROTOTYPES_H_ */
