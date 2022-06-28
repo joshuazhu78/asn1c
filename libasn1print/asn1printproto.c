@@ -49,7 +49,10 @@ static char *proto_value_print(const asn1p_value_t *val, enum asn1print_flags fl
 
 static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum);
 
-static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility);
+void parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility);
+
+static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
+								  proto_enum_t **protoenum, size_t *enums);
 
 static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
 								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
@@ -706,7 +709,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -729,7 +732,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_msg_add_oneof(msg, oneof);
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
@@ -1182,7 +1185,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -1212,7 +1215,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums);
 
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -1302,6 +1305,22 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 	return 0;
 }
 
+void
+parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility) {
+	asn1p_expr_t *se;
+	int count = -1;
+	TQ_FOR(se, &(expr->members), next)
+	{
+		if (se->expr_type == A1TC_UNIVERVAL) { // for enum values
+			count++;
+		} else if (se->expr_type == A1TC_EXTENSIBLE) {
+			*extensibility = 1;
+			break;
+		}
+	}
+	*elCount = count;
+}
+
 static int
 proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum) {
 	asn1p_expr_t *se;
@@ -1355,7 +1374,8 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 }
 
 static int
-proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility) {
+proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
+					   proto_enum_t **protoenum, size_t *enums) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -1420,7 +1440,49 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				}
 			}
 
-			if (se->expr_type == ASN_BASIC_BIT_STRING) {
+			if (se->expr_type == ASN_BASIC_ENUMERATED) {
+				// treating the case of anonymous nested enumerator
+				// creating the (enumerator) message first
+				// since it is nested enum, name would be message specific
+				char *enum_name = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+				// in real code you would check for errors in malloc here
+				strcpy(enum_name, se->Identifier);
+				strcat(enum_name, expr->Identifier);
+
+				// also excluding all dashes from the name
+				int j = 0;
+				char *correct_enum_name = malloc(strlen(enum_name) + 1);
+				for (int i = 0; i < strlen(enum_name); i++) {
+					if (enum_name[i] == '-') {
+						// skipping and not appending this char
+						continue;
+					} else {
+						correct_enum_name[j] = enum_name[i];
+						j++;
+					}
+				}
+
+				proto_enum_t *newenum = proto_create_enum(correct_enum_name,
+														  "enumerated from %s:%d", se->module->source_file_name, se->_lineno);
+				proto_process_enumerated(se, &newenum);
+				proto_enums_add_enum(protoenum, enums, newenum);
+
+				// referencing to the newly created enum and adding a new message element
+				strcpy(elem->type, enum_name);
+
+				//parsing constraints
+				// checking if the structure is extensible
+				int isExtensible = 0;
+				int elCount = 0;
+				parse_constraints_enumerated(se, &elCount, &isExtensible);
+				if (elCount != -1) {
+					elem->tags.valueUB = elCount;
+					elem->tags.valueLB = 0;
+				}
+				if (isExtensible) {
+					elem->tags.valueExt = 1;
+				}
+			} else if (se->expr_type == ASN_BASIC_BIT_STRING) {
 				strcpy(elem->type, "asn1.v1.BitString");
 			} else if (se->expr_type == ASN_BASIC_OBJECT_IDENTIFIER) {
 				strcpy(elem->type, "BasicOid");

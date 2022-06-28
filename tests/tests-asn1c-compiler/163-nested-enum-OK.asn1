@@ -33,4 +33,14 @@ BEGIN
         ch2 Item1
     }
 
+    Item41 ::= SEQUENCE {
+        en ENUMERATED {true, false, ..., accept, decline} OPTIONAL,
+        ...
+    }
+
+    Item42 ::= CHOICE {
+        ...,
+        en ENUMERATED {true, false, ..., accept, decline}
+    }
+
 END

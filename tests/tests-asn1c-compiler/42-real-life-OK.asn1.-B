@@ -10,6 +10,13 @@ option go_package = "pkg42_real_life_ok/v1/modulelapstorage;modulelapstorage";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
+// enumerated from 42-real-life-OK.asn1:55
+enum AcceptasActionItem {
+    ACCEPTAS_ACTION_ITEM_UNKNOWN = 0;
+    ACCEPTAS_ACTION_ITEM_SAFE = 1;
+    ACCEPTAS_ACTION_ITEM_UNSAFE = 2;
+};
+
 // sequence from 42-real-life-OK.asn1:23
 // @inject_tag: aper:"valueExt"
 // {LogLine}
@@ -46,7 +53,8 @@ message VariablePart {
 // @inject_tag: aper:"valueExt"
 // {ActionItem}
 message ActionItem {
-    int32 accept_as = 1 [ json_name="accept-as"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:2,"
+    AcceptasActionItem accept_as = 1 [ json_name="accept-as"];
     // @inject_tag: aper:"optional,"
     optional int32 notify = 2 [ json_name="notify"];
 };

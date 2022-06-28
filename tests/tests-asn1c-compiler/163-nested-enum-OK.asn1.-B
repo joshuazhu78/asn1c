@@ -21,6 +21,22 @@ enum Item1 {
     ITEM1_SEVEN = 6;
 };
 
+// enumerated from 163-nested-enum-OK.asn1:37
+enum EnItem41 {
+    EN_ITEM41_TRUE = 0;
+    EN_ITEM41_FALSE = 1;
+    EN_ITEM41_ACCEPT = 2;
+    EN_ITEM41_DECLINE = 3;
+};
+
+// enumerated from 163-nested-enum-OK.asn1:43
+enum EnItem42 {
+    EN_ITEM42_TRUE = 0;
+    EN_ITEM42_FALSE = 1;
+    EN_ITEM42_ACCEPT = 2;
+    EN_ITEM42_DECLINE = 3;
+};
+
 // sequence from 163-nested-enum-OK.asn1:15
 // @inject_tag: aper:"valueExt"
 // {Item2}
@@ -39,6 +55,25 @@ message Item3 {
         Item2 ch1 = 1 [ json_name="ch1"];
         // @inject_tag: aper:"choiceIdx:2,fromChoiceExt,valueExt,valueLB:0,valueUB:3,"
         Item1 ch2 = 2 [ json_name="ch2"];
+    }
+};
+
+// sequence from 163-nested-enum-OK.asn1:37
+// @inject_tag: aper:"valueExt"
+// {Item41}
+message Item41 {
+    // @inject_tag: aper:"optional,valueExt,valueLB:0,valueUB:1,"
+    optional EnItem41 en = 1 [ json_name="en"];
+};
+
+// sequence from 163-nested-enum-OK.asn1:42
+// @inject_tag: aper:"choiceExt"
+// {Item42}
+message Item42 {
+    // choice from 163-nested-enum-OK.asn1:42
+    oneof item42 {
+        // @inject_tag: aper:"choiceIdx:1,fromChoiceExt,valueExt,valueLB:0,valueUB:1,"
+        EnItem42 en = 1 [ json_name="en"];
     }
 };
 
