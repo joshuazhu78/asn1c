@@ -1,0 +1,55 @@
+
+-- OK: Everything is fine
+
+-- iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
+-- .spelio.software.asn1c.test (9363.1.5.1)
+-- .166
+
+ModuleTestConstraints1
+	{ iso org(3) dod(6) internet (1) private(4) enterprise(1)
+		spelio(9363) software(1) asn1c(5) test(1) 166 }
+	DEFINITIONS ::=
+BEGIN
+
+    Item2 ::= SEQUENCE {
+        se1 SEQUENCE {
+            en ENUMERATED {true, false, ..., accept, decline} OPTIONAL,
+            ...,
+            ie Item1,
+            sq SEQUENCE (SIZE(1..2, ...)) OF OCTET STRING
+        },
+        se2 SEQUENCE {
+            en ENUMERATED {true, false, ..., accept, decline} OPTIONAL,
+            ...,
+            ie Item1,
+            sq SEQUENCE (SIZE(1..2, ...)) OF OCTET STRING
+        },
+        ...
+--        ch CHOICE {
+--            real REAL,
+--            str PrintableString,
+--            ...,
+--            int INTEGER(1..65536, ...),
+--            xn ENUMERATED {true, false, ..., accept, decline},
+--            sq SEQUENCE (SIZE(1..2, ...)) OF BOOLEAN
+--        }
+    }
+
+    Item1 ::= ENUMERATED {
+        one,
+        two,
+        three,
+        four,
+        ...,
+        five,
+        six,
+        seven
+    }
+
+    Item3 ::= CHOICE {
+        ch1 Item2,
+        ...,
+        ch2 Item1
+    }
+
+END

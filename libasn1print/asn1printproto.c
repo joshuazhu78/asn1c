@@ -52,7 +52,7 @@ static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum
 void parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility);
 
 static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-								  proto_enum_t **protoenum, size_t *enums);
+								  proto_enum_t **protoenum, size_t *enums, proto_msg_t **message, size_t *messages);
 
 static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
 								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
@@ -709,7 +709,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -732,7 +732,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_msg_add_oneof(msg, oneof);
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
@@ -1185,7 +1185,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -1215,7 +1215,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
 
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -1375,7 +1375,7 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 
 static int
 proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-					   proto_enum_t **protoenum, size_t *enums) {
+					   proto_enum_t **protoenum, size_t *enums, proto_msg_t **message, size_t *messages) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -1451,7 +1451,8 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 				// also excluding all dashes from the name
 				int j = 0;
-				char *correct_enum_name = malloc(strlen(enum_name) + 1);
+//				char *correct_enum_name = malloc(strlen(enum_name) + 1);
+				char *correct_enum_name = strdup(enum_name);
 				for (int i = 0; i < strlen(enum_name); i++) {
 					if (enum_name[i] == '-') {
 						// skipping and not appending this char
@@ -1461,6 +1462,12 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 						j++;
 					}
 				}
+
+				// cleaning up leftover from the previous string
+				for (int k = j; k < strlen(enum_name); k++) {
+					correct_enum_name[k] = '\0';
+				}
+
 
 				proto_enum_t *newenum = proto_create_enum(correct_enum_name,
 														  "enumerated from %s:%d", se->module->source_file_name, se->_lineno);
@@ -1482,6 +1489,8 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				if (isExtensible) {
 					elem->tags.valueExt = 1;
 				}
+			} else if (se->expr_type == ASN_BASIC_REAL) {
+				strcpy(elem->type, "float");
 			} else if (se->expr_type == ASN_BASIC_BIT_STRING) {
 				strcpy(elem->type, "asn1.v1.BitString");
 			} else if (se->expr_type == ASN_BASIC_OBJECT_IDENTIFIER) {
@@ -1721,6 +1730,64 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 						strcpy(elem->type, comp->name);
 					}
 				}
+			} else if (se->expr_type == ASN_CONSTR_SEQUENCE && se->meta_type == AMT_TYPE) {
+				// treating the case of nested SEQUENCE
+				char *msgName = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+				// in real code you would check for errors in malloc here
+				strcpy(msgName, se->Identifier);
+				strcat(msgName, expr->Identifier);
+
+				proto_msg_t *msg = proto_create_message(msgName, se->spec_index, se->_type_unique_index,
+														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
+				if (se->lhs_params != NULL) {
+					char *param_comments = proto_extract_params(msg, se);
+					strcat(msg->comments, param_comments);
+					free(param_comments);
+				}
+
+				int extensibility = 0;
+				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
+				if (extensibility) {
+					strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
+					elem->tags.valueExt = 1;
+				}
+
+//				proto_msg_add_nested(msgdef, msg);
+				proto_messages_add_msg(message, messages, msg);
+				// referring to the newly created message
+				strcpy(elem->type, msgName);
+			} else if (se->expr_type == ASN_CONSTR_CHOICE) {
+				// treating the case of nested CHOICE
+				char *msgNameOneOf = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+				// in real code you would check for errors in malloc here
+				strcpy(msgNameOneOf, se->Identifier);
+				strcat(msgNameOneOf, expr->Identifier);
+
+				proto_msg_t *msg = proto_create_message(msgNameOneOf, se->spec_index, se->_type_unique_index,
+														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
+
+				if (se->lhs_params != NULL) {
+					char *param_comments = proto_extract_params(msg, se);
+					strcat(msg->comments, param_comments);
+					free(param_comments);
+				}
+
+				proto_msg_oneof_t *oneof = proto_create_msg_oneof(msgNameOneOf,
+																  "choice from %s:%d", se->module->source_file_name, se->_lineno);
+				proto_msg_add_oneof(msg, oneof);
+
+				int extensibility = 0;
+				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
+
+				if (extensibility) {
+					strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
+					elem->tags.choiceExt = 1;
+				}
+
+//				proto_msg_add_nested(msgdef, msg);
+				proto_messages_add_msg(message, messages, msg);
+				// referring to the newly created message
+				strcpy(elem->type, msgNameOneOf);
 			} else if (se->expr_type == A1TC_UNIVERVAL) { // for enum values
 				continue;
 			} else {

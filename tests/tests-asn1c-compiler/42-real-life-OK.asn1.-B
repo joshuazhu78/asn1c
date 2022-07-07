@@ -36,6 +36,14 @@ message VariablePartSet {
     ActionItem resolution = 2 [ json_name="resolution"];
 };
 
+// sequence from 42-real-life-OK.asn1:45
+// @inject_tag: aper:"valueExt"
+// {vrangeVariablePart}
+message VrangeVariablePart {
+    int32 from = 1 [ json_name="from"];
+    int32 to = 2 [ json_name="to"];
+};
+
 // sequence from 42-real-life-OK.asn1:42
 // @inject_tag: aper:"choiceExt"
 // {VariablePart}
@@ -44,9 +52,17 @@ message VariablePart {
     oneof variable_part {
         // @inject_tag: aper:"choiceIdx:1,sizeLB:1,sizeUB:2147483648,"
         int32 vset = 1 [ json_name="vset"];
-        // @inject_tag: aper:"choiceIdx:2,"
-        int32 vrange = 2 [ json_name="vrange"];
+        // @inject_tag: aper:"choiceIdx:2,valueExt,"
+        VrangeVariablePart vrange = 2 [ json_name="vrange"];
     }
+};
+
+// sequence from 42-real-life-OK.asn1:61
+// @inject_tag: aper:"valueExt"
+// {notifyActionItem}
+message NotifyActionItem {
+    bool critical = 1 [ json_name="critical"];
+    int32 email = 2 [ json_name="email"];
 };
 
 // sequence from 42-real-life-OK.asn1:59
@@ -55,7 +71,7 @@ message VariablePart {
 message ActionItem {
     // @inject_tag: aper:"valueExt,valueLB:0,valueUB:2,"
     AcceptasActionItem accept_as = 1 [ json_name="accept-as"];
-    // @inject_tag: aper:"optional,"
-    optional int32 notify = 2 [ json_name="notify"];
+    // @inject_tag: aper:"optional,valueExt,"
+    optional NotifyActionItem notify = 2 [ json_name="notify"];
 };
 

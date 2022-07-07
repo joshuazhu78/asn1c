@@ -10,13 +10,23 @@ option go_package = "pkg41_int_optional_ok/v1/moduletestintoptional;moduletestin
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
+// sequence from 41-int-optional-OK.asn1:16
+// {seqT}
+message SeqT {
+    string string = 1 [ json_name="string"];
+    // @inject_tag: aper:"optional,"
+    optional int32 alpha = 2 [ json_name="alpha"];
+    // @inject_tag: aper:"optional,"
+    optional int32 beta = 3 [ json_name="beta"];
+};
+
 // sequence from 41-int-optional-OK.asn1:19
 // {T}
 message T {
     // choice from 41-int-optional-OK.asn1:19
     oneof t {
         // @inject_tag: aper:"choiceIdx:1,"
-        int32 seq = 1 [ json_name="seq"];
+        SeqT seq = 1 [ json_name="seq"];
         // @inject_tag: aper:"choiceIdx:2,"
         int32 set = 2 [ json_name="set"];
     }
