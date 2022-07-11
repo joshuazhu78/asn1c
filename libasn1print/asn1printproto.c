@@ -1471,11 +1471,13 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 				proto_enum_t *newenum = proto_create_enum(correct_enum_name,
 														  "enumerated from %s:%d", se->module->source_file_name, se->_lineno);
+				// referencing to the newly created enum and adding a new message element
+				strcpy(elem->type, correct_enum_name);
+				// freeing memory
+//				free(correct_enum_name);
+				// processing and adding enumerated
 				proto_process_enumerated(se, &newenum);
 				proto_enums_add_enum(protoenum, enums, newenum);
-
-				// referencing to the newly created enum and adding a new message element
-				strcpy(elem->type, enum_name);
 
 				//parsing constraints
 				// checking if the structure is extensible
@@ -1739,6 +1741,12 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 				proto_msg_t *msg = proto_create_message(msgName, se->spec_index, se->_type_unique_index,
 														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
+
+				// referring to the newly created message
+				strcpy(elem->type, msgName);
+				// freeing memory
+//				free(msgName);
+
 				if (se->lhs_params != NULL) {
 					char *param_comments = proto_extract_params(msg, se);
 					strcat(msg->comments, param_comments);
@@ -1754,8 +1762,6 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 //				proto_msg_add_nested(msgdef, msg);
 				proto_messages_add_msg(message, messages, msg);
-				// referring to the newly created message
-				strcpy(elem->type, msgName);
 			} else if (se->expr_type == ASN_CONSTR_CHOICE) {
 				// treating the case of nested CHOICE
 				char *msgNameOneOf = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
@@ -1765,7 +1771,6 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 				proto_msg_t *msg = proto_create_message(msgNameOneOf, se->spec_index, se->_type_unique_index,
 														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
-
 				if (se->lhs_params != NULL) {
 					char *param_comments = proto_extract_params(msg, se);
 					strcat(msg->comments, param_comments);
@@ -1774,6 +1779,10 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 				proto_msg_oneof_t *oneof = proto_create_msg_oneof(msgNameOneOf,
 																  "choice from %s:%d", se->module->source_file_name, se->_lineno);
+				// referring to the newly created message
+				strcpy(elem->type, msgNameOneOf);
+				// freeing memory
+//				free(msgNameOneOf);
 				proto_msg_add_oneof(msg, oneof);
 
 				int extensibility = 0;
@@ -1786,8 +1795,6 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 //				proto_msg_add_nested(msgdef, msg);
 				proto_messages_add_msg(message, messages, msg);
-				// referring to the newly created message
-				strcpy(elem->type, msgNameOneOf);
 			} else if (se->expr_type == A1TC_UNIVERVAL) { // for enum values
 				continue;
 			} else {
