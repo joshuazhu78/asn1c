@@ -8,7 +8,7 @@
 ModuleTestConstraints1
 	{ iso org(3) dod(6) internet (1) private(4) enterprise(1)
 		spelio(9363) software(1) asn1c(5) test(1) 166 }
-	DEFINITIONS ::=
+	DEFINITIONS AUTOMATIC TAGS ::=
 BEGIN
 
     Item2 ::= SEQUENCE {
@@ -21,18 +21,35 @@ BEGIN
         se2 SEQUENCE {
             en ENUMERATED {true, false, ..., accept, decline} OPTIONAL,
             ...,
-            ie Item1,
+            nestedIE SEQUENCE {
+                ie Item3 OPTIONAL,
+                ...
+            },
             sq SEQUENCE (SIZE(1..2, ...)) OF OCTET STRING
         },
-        ...
---        ch CHOICE {
---            real REAL,
---            str PrintableString,
---            ...,
---            int INTEGER(1..65536, ...),
---            xn ENUMERATED {true, false, ..., accept, decline},
---            sq SEQUENCE (SIZE(1..2, ...)) OF BOOLEAN
---        }
+        ...,
+        ch1 CHOICE {
+            real REAL,
+            str PrintableString,
+            ...,
+            int INTEGER(1..65536, ...),
+            xn ENUMERATED {true, false, ..., accept, decline},
+            sq SEQUENCE (SIZE(1..2, ...)) OF BOOLEAN
+        },
+        se3 SEQUENCE {
+            en ENUMERATED {true, false, ..., accept, decline} OPTIONAL,
+            ...,
+            ie Item3,
+            sq SEQUENCE (SIZE(1..2, ...)) OF OCTET STRING
+        },
+        ch2 CHOICE {
+            real REAL,
+            str PrintableString,
+            ...,
+            int INTEGER(1..65536, ...),
+            xn ENUMERATED {true, false, ..., accept, decline},
+            sq SEQUENCE (SIZE(1..2, ...)) OF BOOLEAN
+        }
     }
 
     Item1 ::= ENUMERATED {

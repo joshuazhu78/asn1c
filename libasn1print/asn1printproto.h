@@ -33,7 +33,7 @@ enum asn1print_flags2 {
 };
 
 int asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *tc,
-		proto_msg_t **message, size_t *messages, proto_enum_t **protoenum, size_t *enums,
+						 proto_module_t *proto_module,
 		enum asn1print_flags2 flags);
 
 #endif /* LIBASN1PRINT_ASN1PRINTPROTO_H_ */

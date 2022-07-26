@@ -52,16 +52,12 @@ static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum
 void parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility);
 
 static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-								  proto_enum_t **protoenum, size_t *enums, proto_msg_t **message, size_t *messages);
+								  proto_module_t *proto_module);
 
 static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
-								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
-								 proto_enum_t **protoenums, size_t *enums_count,
-								 enum asn1print_flags2 flags, asn1p_t *asn);
+								 asn1p_module_t *mod, proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn);
 
-static int asn1extract_columns(asn1p_expr_t *expr,
-							   proto_msg_t **proto_msgs, size_t *proto_msg_count,
-							   char *mod_file);
+static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
 
 static char *escapeQuotesDup(const char *original);
 
@@ -381,15 +377,14 @@ get_upperbound(const asn1p_constraint_t *ct) {
 
 static int
 add_message_from_expression(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *asntree, asn1p_module_t *mod,
-							proto_msg_t **message, size_t *messages, proto_enum_t **protoenum, size_t *enums,
-							enum asn1print_flags2 flags, asn1p_t *asn) {
+							proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn) {
 	if (!expr->Identifier) return 1;
 
 	if (expr->expr_type == ASN_BASIC_ENUMERATED) {
 		proto_enum_t *newenum = proto_create_enum(msgName,
 												  "enumerated from %s:%d", mod->source_file_name, expr->_lineno);
 		proto_process_enumerated(expr, &newenum);
-		proto_enums_add_enum(protoenum, enums, newenum);
+		proto_enums_add_enum(proto_module, newenum);
 
 	} else if (expr->meta_type == AMT_VALUE) {
 		proto_msg_t *msg;
@@ -413,7 +408,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				// ToDo - this should add a non-zero value to the unique tag (used in E2AP), but it doesn't. Figure out why.
 				msgelem->tags.unique = (int) expr->unique;
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				return 0;
 			case ASN_BASIC_RELATIVE_OID:
@@ -422,7 +417,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				msgelem = proto_create_msg_elem("value", "string", NULL);
 				sprintf(msgelem->rules, "string.const = '%s'", asn1f_printable_value(expr->value));
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				break;
 			case ASN_BASIC_OCTET_STRING:
@@ -441,7 +436,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				sprintf(msgelem->rules, "bytes.const = '%s'", byte_string);
 				free((void *) byte_string);
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				break;
 			case A1TC_REFERENCE:
@@ -469,7 +464,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 							msgelem->tags.valueUB = (int) expr->value->value.v_integer;
 						}
 						proto_msg_add_elem(msg, msgelem);
-						proto_messages_add_msg(message, messages, msg);
+						proto_messages_add_msg(proto_module, msg);
 						return 0;
 					case ATV_STRING:
 						strcpy(msgelem->type, "string");
@@ -477,11 +472,11 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 						snprintf(msgelem->rules, 100, "string.const = \"%s\"", escaped);
 						free(escaped);
 						proto_msg_add_elem(msg, msgelem);
-						proto_messages_add_msg(message, messages, msg);
+						proto_messages_add_msg(proto_module, msg);
 						return 0;
 					case ATV_UNPARSED:
 						if (expr->ioc_table != NULL) {
-							asn1extract_columns(expr, message, messages, mod->source_file_name);
+							asn1extract_columns(expr, proto_module, mod->source_file_name);
 						}
 						break;
 					default:
@@ -513,7 +508,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
 		free(constraints);
 		proto_msg_add_elem(msg, msgelem);
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 		return 0;
 	} else if (expr->meta_type == AMT_TYPE &&
@@ -558,7 +553,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 					// TODO: Find why 07 test does not show Reason values
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_STRING_IA5String:
 			case ASN_STRING_BMPString:
@@ -583,12 +578,12 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 					free(constraints);
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_BOOLEAN:
 				strcpy(msgelem->type, "bool");
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_BIT_STRING:
 				strcpy(msgelem->type, "asn1.v1.BitString");
@@ -612,7 +607,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 					}
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_OCTET_STRING:
 				strcpy(msgelem->type, "bytes");
@@ -638,7 +633,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				}
 
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_STRING_PrintableString:
 				strcpy(msgelem->type, "string");
@@ -664,7 +659,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				}
 
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			default:
 				// by default storing tags for sizeLB and sizeUB
@@ -690,7 +685,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 				// adding message elements to the message itself
 				proto_msg_add_elem(msg, msgelem);
 				// adding message to the Protobuf tree
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				// to indicate that we've hit something unexpected
 				fprintf(stderr, "unhandled expr_type: %d and meta_type: %d\n", expr->expr_type, expr->meta_type);
@@ -709,12 +704,12 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 	} else if (expr->meta_type == AMT_TYPE && expr->expr_type == ASN_CONSTR_CHOICE) {
 		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
@@ -732,12 +727,12 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_msg_add_oneof(msg, oneof);
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 	} else if (expr->meta_type == AMT_TYPEREF) {
 		proto_msg_t *msg = proto_create_message(msgName, expr->spec_index, expr->_type_unique_index,
@@ -757,7 +752,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 			if (asntree != NULL) {
 				// extract message first
 				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
 				// now add this message to the message tree
 				if (res) {
 					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -766,7 +761,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 			} else {
 				// extract message first and then
 				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
 				// now add this message to the message tree
 				if (res) {
 					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -787,7 +782,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 
 		proto_msg_add_elem(msg, msgelem);
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 		return 0;
 
 	} else if (expr->meta_type == AMT_VALUESET && expr->expr_type == A1TC_REFERENCE) {
@@ -795,7 +790,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		if (expr->reference && expr->reference->comp_count > 0) {
 			strcpy(refname, expr->reference->components[0].name);
 		}
-		asn1extract_columns(expr, message, messages, mod->source_file_name);
+		asn1extract_columns(expr, proto_module, mod->source_file_name);
 		return 0;
 	} else {
 		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -806,18 +801,17 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 
 static int
 proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
-								 asn1p_module_t *mod, proto_msg_t **messages, size_t *message_count,
-								 proto_enum_t **protoenums, size_t *enums_count,
+								 asn1p_module_t *mod, proto_module_t *proto_module,
 								 enum asn1print_flags2 flags, asn1p_t *asn) {
 	int res = 0;
 
 	if (strcmp(expr->Identifier, refName) == 0) {
 		// Creating and add a message
-		res = add_message_from_expression(refName, msgName, expr, tree, mod, messages, message_count, protoenums, enums_count, flags, asn);
+		res = add_message_from_expression(refName, msgName, expr, tree, mod, proto_module, flags, asn);
 		return res;
 	} else {
 		if (expr->next.tq_next != NULL) {
-			res = proto_extract_referenced_message(refName, msgName, expr->next.tq_next, tree, mod, messages, message_count, protoenums, enums_count, flags, asn);
+			res = proto_extract_referenced_message(refName, msgName, expr->next.tq_next, tree, mod, proto_module, flags, asn);
 			return res;
 		}
 	}
@@ -827,7 +821,7 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 
 int
 asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
-					 proto_msg_t **message, size_t *messages, proto_enum_t **protoenum, size_t *enums,
+					 proto_module_t *proto_module,
 					 enum asn1print_flags2 flags) {
 	if (mod != NULL) {
 		// A dummy placeholder to avoid coverage errors
@@ -839,7 +833,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		int ret;
 		for (i = 0; i < expr->specializations.pspecs_count; i++) {
 			asn1p_expr_t *spec_clone = expr->specializations.pspec[i].my_clone;
-			ret = asn1print_expr_proto(asn, mod, spec_clone, message, messages, protoenum, enums, flags);
+			ret = asn1print_expr_proto(asn, mod, spec_clone, proto_module, flags);
 			if (ret != 0) {
 				return ret;
 			}
@@ -853,7 +847,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		proto_enum_t *newenum = proto_create_enum(expr->Identifier,
 												  "enumerated from %s:%d", mod->source_file_name, expr->_lineno);
 		proto_process_enumerated(expr, &newenum);
-		proto_enums_add_enum(protoenum, enums, newenum);
+		proto_enums_add_enum(proto_module, newenum);
 
 	} else if (expr->meta_type == AMT_VALUE) {
 		proto_msg_t *msg;
@@ -877,7 +871,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				// ToDo - this should add a non-zero value to the unique tag (used in E2AP), but it doesn't. Figure out why.
 				msgelem->tags.unique = (int) expr->unique;
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				return 0;
 			case ASN_BASIC_RELATIVE_OID:
@@ -886,7 +880,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				msgelem = proto_create_msg_elem("value", "string", NULL);
 				sprintf(msgelem->rules, "string.const = '%s'", asn1f_printable_value(expr->value));
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				break;
 			case ASN_BASIC_OCTET_STRING:
@@ -905,7 +899,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				sprintf(msgelem->rules, "bytes.const = '%s'", byte_string);
 				free((void *) byte_string);
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				break;
 			case A1TC_REFERENCE:
@@ -933,7 +927,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 							msgelem->tags.valueUB = (int) expr->value->value.v_integer;
 						}
 						proto_msg_add_elem(msg, msgelem);
-						proto_messages_add_msg(message, messages, msg);
+						proto_messages_add_msg(proto_module, msg);
 						return 0;
 					case ATV_STRING:
 						strcpy(msgelem->type, "string");
@@ -941,11 +935,11 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 						snprintf(msgelem->rules, 100, "string.const = \"%s\"", escaped);
 						free(escaped);
 						proto_msg_add_elem(msg, msgelem);
-						proto_messages_add_msg(message, messages, msg);
+						proto_messages_add_msg(proto_module, msg);
 						return 0;
 					case ATV_UNPARSED:
 						if (expr->ioc_table != NULL) {
-							asn1extract_columns(expr, message, messages, mod->source_file_name);
+							asn1extract_columns(expr, proto_module, mod->source_file_name);
 						}
 						break;
 					default:
@@ -977,7 +971,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		sprintf(msgelem->rules, "int32 = {in: [%s]}", constraints);
 		free(constraints);
 		proto_msg_add_elem(msg, msgelem);
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 		return 0;
 	} else if (expr->meta_type == AMT_TYPE &&
@@ -1022,7 +1016,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					// TODO: Find why 07 test does not show Reason values
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_STRING_IA5String:
 			case ASN_STRING_BMPString:
@@ -1047,12 +1041,12 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					free(constraints);
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_BOOLEAN:
 				strcpy(msgelem->type, "bool");
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_BIT_STRING:
 				strcpy(msgelem->type, "asn1.v1.BitString");
@@ -1076,7 +1070,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					}
 				}
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_BASIC_OCTET_STRING:
 				strcpy(msgelem->type, "bytes");
@@ -1102,7 +1096,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				}
 
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			case ASN_STRING_PrintableString:
 				strcpy(msgelem->type, "string");
@@ -1128,7 +1122,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				}
 
 				proto_msg_add_elem(msg, msgelem);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 				return 0;
 			default:
 				// by default storing tags for sizeLB and sizeUB
@@ -1154,7 +1148,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 				// adding message elements to the message itself
 				proto_msg_add_elem(msg, msgelem);
 				// adding message to the Protobuf tree
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 
 				// to indicate that we've hit something unexpected
 				fprintf(stderr, "unhandled expr_type: %d and meta_type: %d\n", expr->expr_type, expr->meta_type);
@@ -1185,12 +1179,12 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 	} else if (expr->meta_type == AMT_TYPE && expr->expr_type == ASN_CONSTR_CHOICE) {
 		proto_msg_t *msg = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
@@ -1215,13 +1209,13 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
 
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 
 	} else if (expr->expr_type == A1TC_CLASSDEF) {
 		// No equivalent of class in Protobuf - ignore
@@ -1252,7 +1246,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			if (asntree != NULL) {
 				// extract message first
 				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, message, messages, protoenum, enums, flags, asn);
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
 				// now add this message to the message tree
 				if (res) {
 					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -1261,7 +1255,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			} else {
 				// extract message first and then
 				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, expr, expr, mod, message, messages, protoenum, enums, flags, asn);
+				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, expr, expr, mod, proto_module, flags, asn);
 				// now add this message to the message tree
 				if (res) {
 					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -1288,7 +1282,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 
 		proto_msg_add_elem(msg, msgelem);
 
-		proto_messages_add_msg(message, messages, msg);
+		proto_messages_add_msg(proto_module, msg);
 		return 0;
 
 	} else if (expr->meta_type == AMT_VALUESET && expr->expr_type == A1TC_REFERENCE) {
@@ -1296,7 +1290,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		if (expr->reference && expr->reference->comp_count > 0) {
 			strcpy(refname, expr->reference->components[0].name);
 		}
-		asn1extract_columns(expr, message, messages, mod->source_file_name);
+		asn1extract_columns(expr, proto_module, mod->source_file_name);
 		return 0;
 	} else {
 		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -1375,7 +1369,7 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 
 static int
 proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-					   proto_enum_t **protoenum, size_t *enums, proto_msg_t **message, size_t *messages) {
+					   proto_module_t *proto_module) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -1477,7 +1471,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 //				free(correct_enum_name);
 				// processing and adding enumerated
 				proto_process_enumerated(se, &newenum);
-				proto_enums_add_enum(protoenum, enums, newenum);
+				proto_enums_add_enum(proto_module, newenum);
 
 				//parsing constraints
 				// checking if the structure is extensible
@@ -1640,6 +1634,38 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 								se->expr_type, se->meta_type, expr->Identifier, se->Identifier);
 					}
 				}
+				if (oneof) {
+					char *msgName = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+					// in real code you would check for errors in malloc here
+					strcpy(msgName, se->Identifier);
+					strcat(msgName, expr->Identifier);
+
+					proto_msg_t *msg = proto_create_message(msgName, se->spec_index, se->_type_unique_index,
+															"repeated from %s:%d", se->module->source_file_name, se->_lineno, 0);
+					proto_msg_def_t *elem1 = proto_create_msg_elem(se->Identifier, msgName, NULL);
+					strcpy(elem1->rules, elem->rules);
+					strcpy(elem1->type, elem->type);
+					elem1->tags.sizeExt = elem->tags.sizeExt;
+					elem1->tags.valueExt = elem->tags.valueExt;
+					elem1->tags.sizeLB = elem->tags.sizeLB;
+					elem1->tags.sizeUB = elem->tags.sizeUB;
+					elem1->tags.valueLB = elem->tags.valueLB;
+					elem1->tags.valueUB = elem->tags.valueUB;
+					elem1->tags.repeated = elem->tags.repeated;
+
+					proto_msg_add_elem(msg, elem1);
+					proto_messages_add_msg(proto_module, msg);
+
+					strcpy(elem->rules, "");
+					elem->tags.sizeExt = 0;
+					elem->tags.valueExt = 0;
+					elem->tags.sizeLB = -1;
+					elem->tags.sizeUB = -1;
+					elem->tags.valueLB = -1;
+					elem->tags.valueUB = -1;
+					elem->tags.repeated = 0;
+					strcpy(elem->type, msgName);
+				}
 // TODO: Finish this so that it works on 41-int-optional
 //			} else if (se->meta_type == AMT_TYPE && se->expr_type == ASN_CONSTR_SEQUENCE) {
 //				if (se->constraints != NULL) {
@@ -1754,14 +1780,13 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				}
 
 				int extensibility = 0;
-				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, protoenum, enums, message, messages);
+				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 					elem->tags.valueExt = 1;
 				}
 
-//				proto_msg_add_nested(msgdef, msg);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 			} else if (se->expr_type == ASN_CONSTR_CHOICE) {
 				// treating the case of nested CHOICE
 				char *msgNameOneOf = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
@@ -1770,7 +1795,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				strcat(msgNameOneOf, expr->Identifier);
 
 				proto_msg_t *msg = proto_create_message(msgNameOneOf, se->spec_index, se->_type_unique_index,
-														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
+														"choice from %s:%d", se->module->source_file_name, se->_lineno, 0);
 				if (se->lhs_params != NULL) {
 					char *param_comments = proto_extract_params(msg, se);
 					strcat(msg->comments, param_comments);
@@ -1786,15 +1811,14 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				proto_msg_add_oneof(msg, oneof);
 
 				int extensibility = 0;
-				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, protoenum, enums, message, messages);
+				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
 
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 					elem->tags.choiceExt = 1;
 				}
 
-//				proto_msg_add_nested(msgdef, msg);
-				proto_messages_add_msg(message, messages, msg);
+				proto_messages_add_msg(proto_module, msg);
 			} else if (se->expr_type == A1TC_UNIVERVAL) { // for enum values
 				continue;
 			} else {
@@ -2054,8 +2078,7 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 }
 
 static int
-asn1extract_columns(asn1p_expr_t *expr, proto_msg_t **proto_msgs, size_t *proto_msg_count,
-					char *mod_file) {
+asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file) {
 	char comment[PROTO_COMMENTS_CHARS] = {};
 	char msgname[PROTO_NAME_CHARS] = {};
 
@@ -2159,7 +2182,7 @@ asn1extract_columns(asn1p_expr_t *expr, proto_msg_t **proto_msgs, size_t *proto_
 		}
 	}
 
-	proto_messages_add_msg(proto_msgs, proto_msg_count, new_proto_msg);
+	proto_messages_add_msg(proto_module, new_proto_msg);
 	return 0;
 }
 

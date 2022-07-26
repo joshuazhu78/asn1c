@@ -127,7 +127,7 @@ typedef struct proto_module_s {
 proto_enum_t *proto_create_enum(const char *name, const char *comment_fmt, char *src, const int line);
 proto_enum_def_t *proto_create_enum_def(const char* name, const int index, const char *comment);
 void proto_enum_add_def(proto_enum_t *protoenum, proto_enum_def_t *def);
-void proto_enums_add_enum(proto_enum_t **protoenums, size_t *enums_count, proto_enum_t *protoenum);
+void proto_enums_add_enum(proto_module_t *proto_module, proto_enum_t *protoenum);
 proto_msg_t *proto_create_message(const char *name, int spec_index, int unique_idx, const char *comment_fmt, char *src, const int line, const int isConstant);
 proto_msg_oneof_t *proto_create_msg_oneof(const char *name, const char *comment_fmt, char *src, const int line);
 proto_msg_def_t *proto_create_msg_elem(const char *name, const char *type, const char *rules);
@@ -136,7 +136,7 @@ void proto_msg_add_elem(proto_msg_t *msg, proto_msg_def_t *elem);
 void proto_msg_add_oneof(proto_msg_t *msg, proto_msg_oneof_t *oneof);
 void proto_msg_add_nested(proto_msg_t *msg, proto_msg_t *nested);
 void proto_oneof_add_elem(proto_msg_oneof_t *oneof, proto_msg_def_t *elem);
-void proto_messages_add_msg(proto_msg_t **messages, size_t *message_count, proto_msg_t *msg);
+void proto_messages_add_msg(proto_module_t *proto_module, proto_msg_t *msg);
 proto_import_t *proto_create_import(const char *path, asn1p_oid_t *oid);
 char *proto_remove_rel_path(char *path);
 char *proto_remove_whole_path(char *path);

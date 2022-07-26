@@ -118,16 +118,11 @@ proto_enum_add_def(proto_enum_t *protoenum, proto_enum_def_t *def) {
 }
 
 void
-proto_enums_add_enum(proto_enum_t **protoenums, size_t *enums_count, proto_enum_t *protoenum) {
-	size_t existing_count = *enums_count;
-	protoenums = realloc(protoenums, (existing_count + 1) * sizeof(proto_enum_t *));
-	protoenums[existing_count] = protoenum;
-	*enums_count = existing_count + 1;
-	// alternative way, requires ***protoenums pointer
-//	proto_enum_t **tempprotoenums = realloc(*protoenums, (existing_count + 1) * sizeof(proto_enum_t *));
-//	tempprotoenums[existing_count] = protoenum;
-//	*protoenums = tempprotoenums;
-//	*enums_count = existing_count + 1;
+proto_enums_add_enum(proto_module_t *proto_module, proto_enum_t *protoenum) {
+	size_t existing_count = proto_module->enums;
+	proto_module->protoenum = realloc(proto_module->protoenum, (existing_count + 1) * sizeof(proto_enum_t *));
+	proto_module->protoenum[existing_count] = protoenum;
+	proto_module->enums = existing_count + 1;
 }
 
 proto_msg_oneof_t *
@@ -216,16 +211,11 @@ void proto_oneof_add_elem(proto_msg_oneof_t *oneof, proto_msg_def_t *elem) {
 }
 
 void
-proto_messages_add_msg(proto_msg_t **messages, size_t *message_count, proto_msg_t *msg) {
-	size_t existing_count = *message_count;
-	messages = realloc(messages, (existing_count + 1) * sizeof(proto_msg_t *));
-	messages[existing_count] = msg;
-	*message_count = existing_count + 1;
-	// alternative way, requires ***messages pointer
-//	proto_msg_t **tmpmessages = realloc(*messages, (existing_count + 1) * sizeof(proto_msg_t *));
-//	tmpmessages[existing_count] = msg;
-//	*messages = tmpmessages;
-//	*message_count = existing_count + 1;
+proto_messages_add_msg(proto_module_t *proto_module, proto_msg_t *msg) {
+	size_t existing_count = proto_module->messages;
+	proto_module->message = realloc(proto_module->message, (existing_count + 1) * sizeof(proto_msg_t *));
+	proto_module->message[existing_count] = msg;
+	proto_module->messages = existing_count + 1;
 }
 
 void proto_msg_add_nested(proto_msg_t *msg, proto_msg_t *nested) {

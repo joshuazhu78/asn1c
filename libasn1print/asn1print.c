@@ -215,36 +215,10 @@ asn1print_module(asn1p_t *asn, asn1p_module_t *mod, enum asn1print_flags flags) 
 
 		TQ_FOR(tc, &(mod->members), next)
 		{
-			proto_msg_t **message = calloc(0, sizeof(proto_msg_t *));
-			size_t messages = 0;
-			proto_enum_t **protoenum = calloc(0, sizeof(proto_enum_t *));
-			size_t protoenums = 0;
-			ret = asn1print_expr_proto(asn, mod, tc,
-									   message, &messages, protoenum, &protoenums,
-									   (enum asn1print_flags2) flags);
+			ret = asn1print_expr_proto(asn, mod, tc, proto_module, (enum asn1print_flags2) flags);
 			if (ret != 0) {
 				printf("Error in asn1print_expr_proto\n");
 				return ret;
-			}
-
-			if (messages > 0) {
-				size_t existing_msgs = proto_module->messages;
-				proto_module->message = realloc(proto_module->message,
-												(existing_msgs + messages) * sizeof(proto_msg_t *));
-				for (int i = 0; i < (int) messages; i++) {
-					proto_module->message[existing_msgs + i] = message[i];
-				}
-				proto_module->messages = existing_msgs + messages;
-			}
-
-			if (protoenums > 0) {
-				size_t existing_enums = proto_module->enums;
-				proto_module->protoenum = realloc(proto_module->protoenum,
-												  (existing_enums + protoenums) * sizeof(proto_enum_t *));
-				for (int i = 0; i < (int) protoenums; i++) {
-					proto_module->protoenum[existing_enums + i] = protoenum[i];
-				}
-				proto_module->enums = existing_enums + protoenums;
 			}
 		}
 

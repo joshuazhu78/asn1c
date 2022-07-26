@@ -26,7 +26,31 @@ enum Ense2 {
     ENSE2_DECLINE = 3;
 };
 
-// enumerated from 166-nested-message-OK.asn1:39
+// enumerated from 166-nested-message-OK.asn1:36
+enum Xnch1 {
+    XNCH1_TRUE = 0;
+    XNCH1_FALSE = 1;
+    XNCH1_ACCEPT = 2;
+    XNCH1_DECLINE = 3;
+};
+
+// enumerated from 166-nested-message-OK.asn1:40
+enum Ense3 {
+    ENSE3_TRUE = 0;
+    ENSE3_FALSE = 1;
+    ENSE3_ACCEPT = 2;
+    ENSE3_DECLINE = 3;
+};
+
+// enumerated from 166-nested-message-OK.asn1:50
+enum Xnch2 {
+    XNCH2_TRUE = 0;
+    XNCH2_FALSE = 1;
+    XNCH2_ACCEPT = 2;
+    XNCH2_DECLINE = 3;
+};
+
+// enumerated from 166-nested-message-OK.asn1:56
 enum Item1 {
     ITEM1_ONE = 0;
     ITEM1_TWO = 1;
@@ -49,16 +73,88 @@ message Se1Item2 {
     repeated bytes sq = 3 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2}, json_name="sq"];
 };
 
+// sequence from 166-nested-message-OK.asn1:25
+// @inject_tag: aper:"valueExt"
+// {nestedIEse2}
+message NestedIese2 {
+    // @inject_tag: aper:"optional,choiceExt,"
+    optional Item3 ie = 1 [ json_name="ie"];
+};
+
 // sequence from 166-nested-message-OK.asn1:22
 // @inject_tag: aper:"valueExt"
 // {se2Item2}
 message Se2Item2 {
     // @inject_tag: aper:"optional,valueExt,valueLB:0,valueUB:1,"
     optional Ense2 en = 1 [ json_name="en"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:3,fromValueExt,"
-    Item1 ie = 2 [ json_name="ie"];
+    // @inject_tag: aper:"valueExt,fromValueExt,"
+    NestedIese2 nested_ie = 2 [ json_name="nestedIE"];
     // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:2,fromValueExt,"
     repeated bytes sq = 3 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2}, json_name="sq"];
+};
+
+// repeated from 166-nested-message-OK.asn1:37
+// {sqch1}
+message Sqch1 {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:2,"
+    repeated bool sq = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2}, json_name="sq"];
+};
+
+// choice from 166-nested-message-OK.asn1:32
+// @inject_tag: aper:"choiceExt"
+// {ch1Item2}
+message Ch1Item2 {
+    // choice from 166-nested-message-OK.asn1:32
+    oneof ch1_item2 {
+        // @inject_tag: aper:"choiceIdx:1,"
+        float real = 1 [ json_name="real"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        string str = 2 [ json_name="str"];
+        // @inject_tag: aper:"choiceIdx:3,fromChoiceExt,valueExt,valueLB:1,valueUB:65536,"
+        int32 int = 3 [ json_name="int"];
+        // @inject_tag: aper:"choiceIdx:4,fromChoiceExt,valueExt,valueLB:0,valueUB:1,"
+        Xnch1 xn = 4 [ json_name="xn"];
+        // @inject_tag: aper:"choiceIdx:5,fromChoiceExt,"
+        Sqch1 sq = 5 [ json_name="sq"];
+    }
+};
+
+// sequence from 166-nested-message-OK.asn1:40
+// @inject_tag: aper:"valueExt"
+// {se3Item2}
+message Se3Item2 {
+    // @inject_tag: aper:"optional,valueExt,valueLB:0,valueUB:1,"
+    optional Ense3 en = 1 [ json_name="en"];
+    // @inject_tag: aper:"choiceExt,fromValueExt,"
+    Item3 ie = 2 [ json_name="ie"];
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:2,fromValueExt,"
+    repeated bytes sq = 3 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2}, json_name="sq"];
+};
+
+// repeated from 166-nested-message-OK.asn1:51
+// {sqch2}
+message Sqch2 {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:2,"
+    repeated bool sq = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 2}, json_name="sq"];
+};
+
+// choice from 166-nested-message-OK.asn1:46
+// @inject_tag: aper:"choiceExt"
+// {ch2Item2}
+message Ch2Item2 {
+    // choice from 166-nested-message-OK.asn1:46
+    oneof ch2_item2 {
+        // @inject_tag: aper:"choiceIdx:1,"
+        float real = 1 [ json_name="real"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        string str = 2 [ json_name="str"];
+        // @inject_tag: aper:"choiceIdx:3,fromChoiceExt,valueExt,valueLB:1,valueUB:65536,"
+        int32 int = 3 [ json_name="int"];
+        // @inject_tag: aper:"choiceIdx:4,fromChoiceExt,valueExt,valueLB:0,valueUB:1,"
+        Xnch2 xn = 4 [ json_name="xn"];
+        // @inject_tag: aper:"choiceIdx:5,fromChoiceExt,"
+        Sqch2 sq = 5 [ json_name="sq"];
+    }
 };
 
 // sequence from 166-nested-message-OK.asn1:20
@@ -69,13 +165,19 @@ message Item2 {
     Se1Item2 se1 = 1 [ json_name="se1"];
     // @inject_tag: aper:"valueExt,"
     Se2Item2 se2 = 2 [ json_name="se2"];
+    // @inject_tag: aper:"choiceExt,fromValueExt,"
+    Ch1Item2 ch1 = 3 [ json_name="ch1"];
+    // @inject_tag: aper:"valueExt,fromValueExt,"
+    Se3Item2 se3 = 4 [ json_name="se3"];
+    // @inject_tag: aper:"choiceExt,fromValueExt,"
+    Ch2Item2 ch2 = 5 [ json_name="ch2"];
 };
 
-// sequence from 166-nested-message-OK.asn1:50
+// sequence from 166-nested-message-OK.asn1:67
 // @inject_tag: aper:"choiceExt"
 // {Item3}
 message Item3 {
-    // choice from 166-nested-message-OK.asn1:50
+    // choice from 166-nested-message-OK.asn1:67
     oneof item3 {
         // @inject_tag: aper:"choiceIdx:1,valueExt,"
         Item2 ch1 = 1 [ json_name="ch1"];
