@@ -10,7 +10,12 @@ ModuleTestClass
 		spelio(9363) software(1) asn1c(5) test(1) 18 }
 	DEFINITIONS ::=
 BEGIN
-	
+
+    -- An information object set - see Dubuisson Chap 15.5
+    Functions FUNCTION ::= {
+        operator-plus | operator-square | operator-root
+    }
+
 	Pair ::= SEQUENCE {a INTEGER, b INTEGER}
 
 	FUNCTION ::= CLASS {
@@ -47,11 +52,6 @@ BEGIN
 		UNUSED TYPE INTEGER,
 		RESULT TYPE	REAL,
 		CODE 3
-	}
-
-	-- An information object set - see dubisson Chap 15.5
-	Functions FUNCTION ::= {
-		operator-plus | operator-square | operator-root
 	}
 
 END
