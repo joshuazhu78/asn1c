@@ -59,8 +59,8 @@ message Attributes {
 message RafService {
     // @inject_tag: aper:"unique,"
     int32 id = 1 [ json_name="&id"];
-    int32 power = 2 [ json_name="&power"];
-    int32 nametag = 3 [ json_name="&nametag"];
+    int32 power = 2 [(validate.v1.rules).int32.const = 10, json_name="&power"];
+    string nametag = 3 [(validate.v1.rules).string.const = 'nameraf', json_name="&nametag"];
 };
 
 // concrete instance(s) of class ATTRIBUTE from 98a-attribute-class-OK.asn1:30
@@ -68,17 +68,17 @@ message RafService {
 message RcfService {
     // @inject_tag: aper:"unique,"
     int32 id = 1 [ json_name="&id"];
-    int32 power = 2 [ json_name="&power"];
-    int32 nametag = 3 [ json_name="&nametag"];
+    int32 power = 2 [(validate.v1.rules).int32.const = 20, json_name="&power"];
+    string nametag = 3 [(validate.v1.rules).string.const = 'namercf', json_name="&nametag"];
 };
 
 // concrete instance(s) of class ATTRIBUTE from 98a-attribute-class-OK.asn1:31
 // {rdfService}
 message RdfService {
     // @inject_tag: aper:"unique,"
-    int32 id = 1 [ json_name="&id"];
-    int32 power = 2 [ json_name="&power"];
-    int32 nametag = 3 [ json_name="&nametag"];
+    int32 id = 1 [(validate.v1.rules).string.const = '{3 2 3}', json_name="&id"];
+    int32 power = 2 [(validate.v1.rules).int32.const = 30, json_name="&power"];
+    string nametag = 3 [(validate.v1.rules).string.const = 'namerdf', json_name="&nametag"];
 };
 
 // constant Basic OID from 98a-attribute-class-OK.asn1:34

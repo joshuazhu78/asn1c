@@ -10,7 +10,7 @@ option go_package = "pkg18a_class_ok/v1/moduletestclass;moduletestclass";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
-// concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:15
+// concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:29
 // {_Functions}
 message Functions {
 // {Functions001}
@@ -27,20 +27,12 @@ message Functions {
         int32 result_type = 3 [ json_name="&ResultType"];
     };
 
-// {Functions003}
-    message Functions003 {
-        int32 code = 1 [(validate.v1.rules).int32.const = 3, json_name="&code"];
-        int32 arg_type = 2 [ json_name="&ArgType"];
-        int32 unused = 3 [ json_name="&Unused"];
-        float result_type = 4 [ json_name="&ResultType"];
-    };
-
     Functions001 instance001 = 1 [ json_name="instance001"];
     Functions002 instance002 = 2 [ json_name="instance002"];
-    Functions003 instance003 = 3 [ json_name="instance003"];
+    Operatorroot operator_root = 3 [ json_name="operator_root"];
 };
 
-// sequence from 18a-class-OK.asn1:19
+// sequence from 18a-class-OK.asn1:33
 // {Pair}
 message Pair {
     int32 a = 1 [ json_name="a"];
@@ -51,7 +43,7 @@ message Pair {
 // {operator-plus}
 message Operatorplus {
     // @inject_tag: aper:"unique,"
-    int32 code = 1 [ json_name="&code"];
+    int32 code = 1 [(validate.v1.rules).int32.const = 1, json_name="&code"];
     Pair arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
     int32 unused = 3 [ json_name="&Unused"];
@@ -62,7 +54,7 @@ message Operatorplus {
 // {operator-square}
 message Operatorsquare {
     // @inject_tag: aper:"unique,"
-    int32 code = 1 [ json_name="&code"];
+    int32 code = 1 [(validate.v1.rules).int32.const = 2, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
     int32 unused = 3 [ json_name="&Unused"];
@@ -73,7 +65,18 @@ message Operatorsquare {
 // {operator-root}
 message Operatorroot {
     // @inject_tag: aper:"unique,"
-    int32 code = 1 [ json_name="&code"];
+    int32 code = 1 [(validate.v1.rules).int32.const = 3, json_name="&code"];
+    int32 arg_type = 2 [ json_name="&ArgType"];
+    // @inject_tag: aper:"optional,"
+    int32 unused = 3 [ json_name="&Unused"];
+    float result_type = 4 [ json_name="&ResultType"];
+};
+
+// concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:57
+// {operator-root2}
+message Operatorroot2 {
+    // @inject_tag: aper:"unique,"
+    int32 code = 1 [(validate.v1.rules).int32.const = 4, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
     int32 unused = 3 [ json_name="&Unused"];

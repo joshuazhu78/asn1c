@@ -59,7 +59,7 @@ static int proto_extract_referenced_message(const char *refName, const char *msg
 
 static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
 static int asn1extract_columns_correct(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
-static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
+static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, char *mod_file);
 
 static char *escapeQuotesDup(const char *original);
 
@@ -944,7 +944,17 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 						// ToDo: Regular messages, which are defined through CLASS are processed here..
 						if (expr->ioc_table != NULL) {
 //							asn1extract_columns(expr, proto_module, mod->source_file_name);
-							process_class_referenced_message(expr, proto_module, mod->source_file_name);
+							struct asn1p_expr_s *asntree = NULL;
+							if (asn->modules.tq_head != NULL) {
+								if (asn->modules.tq_head->members.tq_head != NULL) {
+									asntree = asn->modules.tq_head->members.tq_head;
+								}
+							}
+							if (asntree != NULL) {
+								process_class_referenced_message(expr, proto_module, asntree, mod->source_file_name);
+							} else {
+								process_class_referenced_message(expr, proto_module, expr, mod->source_file_name);
+							}
 						}
 						break;
 					default:
@@ -1224,6 +1234,8 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 
 	} else if (expr->expr_type == A1TC_CLASSDEF) {
 		// No equivalent of class in Protobuf - ignore
+		// ToDo - CLASS as a structure in asn1c tool, contains information about all structures defined through this particular CLASS.
+		//  Can we or should we make use of it? It is expressed in a number of rows in ioc_table field.
 		return 0;
 
 	} else if (expr->meta_type == AMT_TYPEREF) {
@@ -2321,7 +2333,7 @@ asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_
 
 // This function creates a message for a standalone message defined through the CLASS
 static int
-process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file) {
+process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, char *mod_file) {
 	char comment[PROTO_COMMENTS_CHARS] = {};
 	char msgname[PROTO_NAME_CHARS] = {};
 
@@ -2344,26 +2356,76 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 		for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
 			struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
 
-			// ToDo: assuming that the type of the field is a referenced structure, no need to parse constraints..
-			//  Resolve in the future!
 			proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier, "int32", NULL);
 			if (colij.value != NULL) {
 				if (colij.value->reference != NULL) {
 					strcpy(elem->type, colij.value->reference->components->name);
+					// parsing extensibility here
+					int oneOfDependent = 0;
+					int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
+																   &oneOfDependent);
+					if (isExtensible == 1 && oneOfDependent == 0) {
+						elem->tags.valueExt = 1;
+					} else if (isExtensible == 1 && oneOfDependent == 1) {
+						elem->tags.choiceExt = 1;
+					}
+					// make sure that the type is enumerator
+					int enm = 0;
+					int elCount = -1;
+					enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+
+					if (enm) {
+						if (elCount != -1) {
+							elem->tags.valueUB = elCount;
+						}
+						elem->tags.valueLB = 0;
+					}
 				} else {
-					if (colij.value->meta_type == AMT_TYPE && (colij.value->expr_type == ASN_STRING_IA5String ||
-																colij.value->expr_type == ASN_STRING_BMPString ||
-																colij.value->expr_type == ASN_STRING_PrintableString)) {
+					// ToDo - fix handling of AMT_VALUE vs AMT_TYPE
+					//  - AMT_VALUE is used to indicate that the object in the field is a value, not a type.
+					//  In other words, it's a constant.
+					//  - AMT_TYPE is used to indicate that the object in the field defined through a type,
+					//  e.g., INTEGER, and values of that type may vary.
+					//  What would be the correct way to parse constraints of the class fields then?
+					if (colij.value->expr_type == ASN_STRING_IA5String ||
+													colij.value->expr_type == ASN_STRING_BMPString ||
+													colij.value->expr_type == ASN_STRING_PrintableString) {
 						strcpy(elem->type, "string");
-					} else if (colij.value->meta_type == AMT_TYPE && colij.value->expr_type == ASN_BASIC_BOOLEAN) {
+					} else if (colij.value->expr_type == ASN_BASIC_BOOLEAN) {
 						strcpy(elem->type, "bool");
-					} else if (colij.value->meta_type == AMT_TYPE && colij.value->expr_type == ASN_BASIC_BIT_STRING) {
+					} else if (colij.value->expr_type == ASN_BASIC_BIT_STRING) {
 						strcpy(elem->type, "asn1.v1.BitString");
-					} else if (colij.value->meta_type == AMT_TYPE &&
-							   colij.value->expr_type == ASN_BASIC_OCTET_STRING) {
+					} else if (colij.value->expr_type == ASN_BASIC_OCTET_STRING) {
 						strcpy(elem->type, "bytes");
-					} else if (colij.value->meta_type == AMT_TYPE && colij.value->expr_type == ASN_BASIC_REAL) {
+					} else if (colij.value->expr_type == ASN_BASIC_REAL) {
 						strcpy(elem->type, "float");
+					}
+					// ToDo - extensibility and LB and UB (for strings, integers and bytes)
+					//  should be parsed in different way..
+					if (colij.value->meta_type == AMT_VALUE && colij.value->value != NULL) {
+						char rules[PROTO_RULES_CHARS] = {};
+						const char *pval = asn1f_printable_value(colij.value->value);
+						switch (colij.value->value->type) {
+							case ATV_INTEGER:
+								if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
+									(long) (colij.value->value->value.v_integer) < -2147483647) {
+									snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
+											 (int) (colij.value->value->value.v_integer));
+									strcpy(elem->type, "int64");
+								} else {
+									snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
+											 (int) (colij.value->value->value.v_integer));
+								}
+								break;
+							case ATV_STRING:
+							case ATV_UNPARSED:
+								snprintf(rules, PROTO_RULES_CHARS, "string.const = '%s'", pval);
+								break;
+							default:
+								fprintf(stderr, "Unhandled value type %d %s\n", colij.value->value->type, pval);
+								break;
+						}
+						strcpy(elem->rules, rules);
 					}
 				}
 			} else {
@@ -2377,10 +2439,6 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			if (colij.field->marker.flags == EM_OPTIONAL) {
 				elem->tags.optional = 1;
 			}
-
-			//ToDo - parse extensibility..
-
-			//ToDo - embed validation here..
 
 //			fprintf(stderr, "Field name %s, meta_type %s, expr_type %s, unique %d, flags %s\n",
 //					colij.field->Identifier, colij.field->meta_type, colij.field->expr_type, colij.field->unique, colij.field->marker.flags);
