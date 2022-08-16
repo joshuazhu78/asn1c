@@ -11,10 +11,10 @@ ModuleTestClass
 	DEFINITIONS ::=
 BEGIN
 
---    Functions FUNCTION ::= {
---        {CODE id-valueSet1    ARGUMENT Type1  PRESENCE mandatory  CRITICALITY high} |
---        {CODE id-valueSet2    ARGUMENT Type2  PRESENCE optional   CRITICALITY low}
---    }
+    Functions FUNCTION ::= {
+        {CODE id-valueSet1,    ARGUMENT Type1,  PRESENCE mandatory,  CRITICALITY high} |
+        {CODE id-valueSet2,    ARGUMENT Type2,  PRESENCE optional,   CRITICALITY low}
+    }
 
 	operator1 FUNCTION ::= {
 		CODE            id-operator1,

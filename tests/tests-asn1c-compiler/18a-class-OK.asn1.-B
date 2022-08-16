@@ -10,26 +10,18 @@ option go_package = "pkg18a_class_ok/v1/moduletestclass;moduletestclass";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
-// concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:29
-// {_Functions}
+// value set from 18a-class-OK.asn1:15
+// {Functions}
 message Functions {
-// {Functions001}
-    message Functions001 {
-        int32 code = 1 [(validate.v1.rules).int32.const = 1, json_name="&code"];
-        Pair arg_type = 2 [ json_name="&ArgType"];
-        int32 result_type = 3 [ json_name="&ResultType"];
-    };
-
-// {Functions002}
-    message Functions002 {
-        int32 code = 1 [(validate.v1.rules).int32.const = 2, json_name="&code"];
-        int32 arg_type = 2 [ json_name="&ArgType"];
-        int32 result_type = 3 [ json_name="&ResultType"];
-    };
-
-    Functions001 instance001 = 1 [ json_name="instance001"];
-    Functions002 instance002 = 2 [ json_name="instance002"];
-    Operatorroot operator_root = 3 [ json_name="operator_root"];
+    // value set translated as choice from 18a-class-OK.asn1:15
+    oneof functions {
+        // @inject_tag: aper:"choiceIdx:1,"
+        Operatorplus operator_plus = 1 [ json_name="operator-plus"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        Operatorsquare operator_square = 2 [ json_name="operator-square"];
+        // @inject_tag: aper:"choiceIdx:3,"
+        Operatorroot operator_root = 3 [ json_name="operator-root"];
+    }
 };
 
 // sequence from 18a-class-OK.asn1:33
@@ -42,7 +34,7 @@ message Pair {
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:36
 // {operator-plus}
 message Operatorplus {
-    // @inject_tag: aper:"unique,"
+    // @inject_tag: aper:"valueLB:0,valueUB:2147483648,unique,"
     int32 code = 1 [(validate.v1.rules).int32.const = 1, json_name="&code"];
     Pair arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
@@ -53,7 +45,7 @@ message Operatorplus {
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:43
 // {operator-square}
 message Operatorsquare {
-    // @inject_tag: aper:"unique,"
+    // @inject_tag: aper:"valueLB:0,valueUB:2147483648,unique,"
     int32 code = 1 [(validate.v1.rules).int32.const = 2, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
@@ -64,7 +56,7 @@ message Operatorsquare {
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:50
 // {operator-root}
 message Operatorroot {
-    // @inject_tag: aper:"unique,"
+    // @inject_tag: aper:"valueLB:0,valueUB:2147483648,unique,"
     int32 code = 1 [(validate.v1.rules).int32.const = 3, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
@@ -75,8 +67,19 @@ message Operatorroot {
 // concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:57
 // {operator-root2}
 message Operatorroot2 {
-    // @inject_tag: aper:"unique,"
+    // @inject_tag: aper:"valueLB:0,valueUB:2147483648,unique,"
     int32 code = 1 [(validate.v1.rules).int32.const = 4, json_name="&code"];
+    int32 arg_type = 2 [ json_name="&ArgType"];
+    // @inject_tag: aper:"optional,"
+    int32 unused = 3 [ json_name="&Unused"];
+    float result_type = 4 [ json_name="&ResultType"];
+};
+
+// concrete instance(s) of class FUNCTION from 18a-class-OK.asn1:64
+// {operator-root3}
+message Operatorroot3 {
+    // @inject_tag: aper:"valueLB:0,valueUB:2147483648,unique,"
+    int32 code = 1 [(validate.v1.rules).int32.const = 5, json_name="&code"];
     int32 arg_type = 2 [ json_name="&ArgType"];
     // @inject_tag: aper:"optional,"
     int32 unused = 3 [ json_name="&Unused"];

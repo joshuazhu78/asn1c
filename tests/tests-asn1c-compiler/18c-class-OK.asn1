@@ -14,10 +14,10 @@ ModuleTestClass
 	DEFINITIONS ::=
 BEGIN
 
---    Functions FUNCTION ::= {
---        {CODE id-valueSet1,    ARGUMENT Type1,  PRESENCE mandatory,  CRITICALITY high} |
---        {CODE id-valueSet2,    ARGUMENT Type2,  PRESENCE optional,   CRITICALITY low}
---    }
+    Functions FUNCTION ::= {
+        {CODE id-valueSet1,    ARGUMENT Type1,  PRESENCE mandatory,  CRITICALITY high} |
+        {CODE id-valueSet2,    ARGUMENT Type2,  PRESENCE optional,   CRITICALITY low} | operator3
+    }
 
 	operator1 FUNCTION ::= {
 		CODE            id-operator1,
@@ -33,6 +33,13 @@ BEGIN
    		CRITICALITY     low
 	}
 
+    operator3 FUNCTION ::= {
+        CODE            id-operator3,
+        ARGUMENT        Type3,
+        PRESENCE        optional,
+        CRITICALITY     low
+    }
+
     Type1 ::= SEQUENCE{
         se1 REAL,
         se2 OCTET STRING OPTIONAL,
@@ -44,6 +51,8 @@ BEGIN
         ch2 BIT STRING,
         ...
     }
+
+    Type3 ::= OCTET STRING
 
 	FUNCTION ::= CLASS {
 		&code			CodeID,
@@ -75,6 +84,7 @@ BEGIN
 
     id-operator1        CodeID ::= 1
     id-operator2        CodeID ::= 2
+    id-operator2        CodeID ::= 3
     id-valueSet1        CodeID ::= 21
     id-valueSet2        CodeID ::= 22
 

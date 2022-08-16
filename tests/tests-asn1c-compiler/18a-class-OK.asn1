@@ -11,6 +11,11 @@ ModuleTestClass
 	DEFINITIONS ::=
 BEGIN
 
+    -- An information object set - see Dubuisson Chap 15.5
+    Functions FUNCTION ::= {
+        operator-plus | operator-square | operator-root
+    }
+
 	FUNCTION ::= CLASS {
 		&code			INTEGER (0..MAX) UNIQUE,
 		&ArgType		,
@@ -24,11 +29,6 @@ BEGIN
 		[RESULT TYPE &ResultType,]
 		CODE &code
 	}
-
-    -- An information object set - see Dubuisson Chap 15.5
-    Functions FUNCTION ::= {
-        operator-plus | operator-square | operator-root
-    }
 
 	Pair ::= SEQUENCE {a INTEGER, b INTEGER}
 
@@ -59,6 +59,13 @@ BEGIN
 		UNUSED TYPE INTEGER,
 		RESULT TYPE	REAL,
 		CODE 4
+	}
+
+	operator-root3 FUNCTION ::= {
+		ARGUMENT TYPE INTEGER,
+		UNUSED TYPE INTEGER,
+		RESULT TYPE	REAL,
+		CODE 5
 	}
 
 END

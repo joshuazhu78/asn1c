@@ -18,40 +18,28 @@ message Attribute {
 };
 
 // concrete instance(s) of class ATTRIBUTE from 98a-attribute-class-OK.asn1:27
-// {_Attributes}
+// {Attributes003}
+message Attributes003 {
+    // @inject_tag: aper:"unique,"
+    int32 id = 1 [(validate.v1.rules).string.const = '{3 2 4}', json_name="&id"];
+    int32 power = 2 [(validate.v1.rules).int32.const = 50, json_name="&power"];
+    string nametag = 3 [(validate.v1.rules).string.const = 'nameref', json_name="&nametag"];
+};
+
+// value set from 98a-attribute-class-OK.asn1:27
+// {Attributes}
 message Attributes {
-// {Attributesraf}
-    message Attributesraf {
-        Raf id = 1 [ json_name="&id"];
-        int32 power = 2 [(validate.v1.rules).int32.const = 10, json_name="&power"];
-        string nametag = 3 [(validate.v1.rules).string.const = 'nameraf', json_name="&nametag"];
-    };
-
-// {Attributesrcf}
-    message Attributesrcf {
-        Rcf id = 1 [ json_name="&id"];
-        int32 power = 2 [(validate.v1.rules).int32.const = 20, json_name="&power"];
-        string nametag = 3 [(validate.v1.rules).string.const = 'namercf', json_name="&nametag"];
-    };
-
-// {Attributes{3 2 3}}
-    message Attributes323 {
-        string id = 1 [(validate.v1.rules).string.const = '{3 2 3}', json_name="&id"];
-        int32 power = 2 [(validate.v1.rules).int32.const = 30, json_name="&power"];
-        string nametag = 3 [(validate.v1.rules).string.const = 'namerdf', json_name="&nametag"];
-    };
-
-// {Attributes{3 2 4}}
-    message Attributes324 {
-        string id = 1 [(validate.v1.rules).string.const = '{3 2 4}', json_name="&id"];
-        int32 power = 2 [(validate.v1.rules).int32.const = 50, json_name="&power"];
-        string nametag = 3 [(validate.v1.rules).string.const = 'nameref', json_name="&nametag"];
-    };
-
-    Attributesraf attributeraf = 1 [ json_name="ATTRIBUTEraf"];
-    Attributesrcf attributercf = 2 [ json_name="ATTRIBUTErcf"];
-    Attributes323 attribute_3_2_3 = 3 [ json_name="ATTRIBUTE{3 2 3}"];
-    Attributes324 attribute_3_2_4 = 4 [ json_name="ATTRIBUTE{3 2 4}"];
+    // value set translated as choice from 98a-attribute-class-OK.asn1:27
+    oneof attributes {
+        // @inject_tag: aper:"choiceIdx:1,"
+        RafService raf_service = 1 [ json_name="rafService"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        RcfService rcf_service = 2 [ json_name="rcfService"];
+        // @inject_tag: aper:"choiceIdx:3,"
+        RdfService rdf_service = 3 [ json_name="rdfService"];
+        // @inject_tag: aper:"choiceIdx:4,"
+        Attributes003 attributes003 = 4 [ json_name="Attributes003"];
+    }
 };
 
 // concrete instance(s) of class ATTRIBUTE from 98a-attribute-class-OK.asn1:29

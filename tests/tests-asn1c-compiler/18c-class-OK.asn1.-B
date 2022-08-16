@@ -10,16 +10,41 @@ option go_package = "pkg18c_class_ok/v1/moduletestclass;moduletestclass";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
 
-// enumerated from 18c-class-OK.asn1:65
+// enumerated from 18c-class-OK.asn1:74
 enum Criticality {
     CRITICALITY_HIGH = 0;
     CRITICALITY_LOW = 1;
 };
 
-// enumerated from 18c-class-OK.asn1:71
+// enumerated from 18c-class-OK.asn1:80
 enum Presence {
     PRESENCE_OPTIONAL = 0;
     PRESENCE_MANDATORY = 1;
+};
+
+// value set from 18c-class-OK.asn1:17
+// {Functions&ArgType}
+message FunctionsArgType {
+    // value set translated as choice from 18c-class-OK.asn1:17
+    oneof functions {
+        // @inject_tag: aper:"choiceIdx:1,valueExt,"
+        Type1 type1 = 1 [ json_name="Type1"];
+        // @inject_tag: aper:"choiceIdx:2,choiceExt,"
+        Type2 type2 = 2 [ json_name="Type2"];
+        // @inject_tag: aper:"choiceIdx:3,"
+        Type3 type3 = 3 [ json_name="Type3"];
+    }
+};
+
+// concrete instance(s) of class FUNCTION from 18c-class-OK.asn1:17
+// {Functions}
+message Functions {
+    CodeId code = 1 [ json_name="&code"];
+    FunctionsArgType arg_type = 2 [ json_name="&ArgType"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 3 [ json_name="&presence"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 4 [ json_name="&criticality"];
 };
 
 // concrete instance(s) of class FUNCTION from 18c-class-OK.asn1:22
@@ -46,7 +71,18 @@ message Operator2 {
     Criticality criticality = 4 [ json_name="&criticality"];
 };
 
-// sequence from 18c-class-OK.asn1:37
+// concrete instance(s) of class FUNCTION from 18c-class-OK.asn1:36
+// {operator3}
+message Operator3 {
+    CodeId code = 1 [ json_name="&code"];
+    Type3 arg_type = 2 [ json_name="&ArgType"];
+    // @inject_tag: aper:"optional,valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 3 [ json_name="&presence"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 4 [ json_name="&criticality"];
+};
+
+// sequence from 18c-class-OK.asn1:44
 // @inject_tag: aper:"valueExt"
 // {Type1}
 message Type1 {
@@ -55,11 +91,11 @@ message Type1 {
     optional bytes se2 = 2 [ json_name="se2"];
 };
 
-// sequence from 18c-class-OK.asn1:43
+// sequence from 18c-class-OK.asn1:50
 // @inject_tag: aper:"choiceExt"
 // {Type2}
 message Type2 {
-    // choice from 18c-class-OK.asn1:43
+    // choice from 18c-class-OK.asn1:50
     oneof type2 {
         // @inject_tag: aper:"choiceIdx:1,"
         int32 ch1 = 1 [ json_name="ch1"];
@@ -68,35 +104,41 @@ message Type2 {
     }
 };
 
-// range of Integer from 18c-class-OK.asn1:62
+// range of Integer from 18c-class-OK.asn1:55
+// {Type3}
+message Type3 {
+    bytes value = 1 [ json_name="value"];
+};
+
+// range of Integer from 18c-class-OK.asn1:71
 // {CodeID}
 message CodeId {
     // @inject_tag: aper:"valueExt,valueLB:0,valueUB:128,"
     int32 value = 1 [(validate.v1.rules).int32 = {gte: 0, lte: 128}, json_name="value"];
 };
 
-// reference from 18c-class-OK.asn1:76
+// reference from 18c-class-OK.asn1:85
 // {id-operator1}
 message Idoperator1 {
     // @inject_tag: aper:"valueLB:1,valueUB:1,"
     int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"]; // CodeID
 };
 
-// reference from 18c-class-OK.asn1:77
+// reference from 18c-class-OK.asn1:86
 // {id-operator2}
 message Idoperator2 {
     // @inject_tag: aper:"valueLB:2,valueUB:2,"
     int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"]; // CodeID
 };
 
-// reference from 18c-class-OK.asn1:78
+// reference from 18c-class-OK.asn1:88
 // {id-valueSet1}
 message IdvalueSet1 {
     // @inject_tag: aper:"valueLB:21,valueUB:21,"
     int32 value = 1 [(validate.v1.rules).int32.const = 21, json_name="value"]; // CodeID
 };
 
-// reference from 18c-class-OK.asn1:79
+// reference from 18c-class-OK.asn1:89
 // {id-valueSet2}
 message IdvalueSet2 {
     // @inject_tag: aper:"valueLB:22,valueUB:22,"

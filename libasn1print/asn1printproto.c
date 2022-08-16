@@ -57,9 +57,12 @@ static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int r
 static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
 								 asn1p_module_t *mod, proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn);
 
+static int process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart);
+static int get_choice_part(asn1p_expr_t *member, char *choicePart);
+
 static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
-static int asn1extract_columns_correct(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
-static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, char *mod_file);
+static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, int isValueSet);
+static char *find_referenced_message(char *class_name, asn1p_expr_t *asntree, asn1p_ioc_row_t *referenced_fields);
 
 static char *escapeQuotesDup(const char *original);
 
@@ -821,6 +824,64 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 	return res;
 }
 
+static int
+process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart) {
+	int res = 0;
+
+	if (strcmp(tree->Identifier, className) == 0) {
+		// searching for unique and choice part
+		if (tree->ioc_table != NULL) {
+			int rowIdx = 0;
+			for (rowIdx = 0; rowIdx < (int) tree->ioc_table->rows; rowIdx++) {
+				asn1p_ioc_row_t *table_row = tree->ioc_table->row[rowIdx];
+
+				// making sure that the unique tag is present
+				int colIdx = 0;
+				for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+					struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+					if (colij.field->unique) {
+						*unique = 1;
+						break;
+					}
+				}
+			}
+			if (tree->members.tq_head) {
+				get_choice_part(tree->members.tq_head, choicePart);
+			}
+			return 1;
+		}
+		// couldn't find class with non-empty fields.. returning 0 to indicate it
+		return 0;
+	} else {
+		if (tree->next.tq_next != NULL) {
+			res = process_referenced_class(className, tree->next.tq_next, unique, choicePart);
+			return res;
+		}
+	}
+
+	return res;
+}
+
+// this function extract the choice part name for the value set
+static int
+get_choice_part(asn1p_expr_t *member, char *choicePart) {
+	int res = 0;
+
+	// iterate over tree members and get the structure name, which has tree->members.tq_head == NULL
+	if (member->members.tq_head == NULL) {
+		// this is the choice part
+		strcat(choicePart, member->Identifier);
+		return 1;
+	} else {
+		if (member->next.tq_next != NULL) {
+			res = get_choice_part(member->next.tq_next, choicePart);
+			return res;
+		}
+	}
+
+	return res;
+}
+
 int
 asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					 proto_module_t *proto_module,
@@ -870,8 +931,6 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					msgelem->tags.valueLB = (int) expr->value->value.v_integer;
 					msgelem->tags.valueUB = (int) expr->value->value.v_integer;
 				}
-				// ToDo - this should add a non-zero value to the unique tag (used in E2AP), but it doesn't. Figure out why.
-				msgelem->tags.unique = (int) expr->unique;
 				proto_msg_add_elem(msg, msgelem);
 				proto_messages_add_msg(proto_module, msg);
 
@@ -943,7 +1002,6 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					case ATV_UNPARSED:
 						// ToDo: Regular messages, which are defined through CLASS are processed here..
 						if (expr->ioc_table != NULL) {
-//							asn1extract_columns(expr, proto_module, mod->source_file_name);
 							struct asn1p_expr_s *asntree = NULL;
 							if (asn->modules.tq_head != NULL) {
 								if (asn->modules.tq_head->members.tq_head != NULL) {
@@ -951,9 +1009,9 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 								}
 							}
 							if (asntree != NULL) {
-								process_class_referenced_message(expr, proto_module, asntree, mod->source_file_name);
+								process_class_referenced_message(expr, proto_module, asntree, 0);
 							} else {
-								process_class_referenced_message(expr, proto_module, expr, mod->source_file_name);
+								process_class_referenced_message(expr, proto_module, expr, 0);
 							}
 						}
 						break;
@@ -1234,8 +1292,6 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 
 	} else if (expr->expr_type == A1TC_CLASSDEF) {
 		// No equivalent of class in Protobuf - ignore
-		// ToDo - CLASS as a structure in asn1c tool, contains information about all structures defined through this particular CLASS.
-		//  Can we or should we make use of it? It is expressed in a number of rows in ioc_table field.
 		return 0;
 
 	} else if (expr->meta_type == AMT_TYPEREF) {
@@ -1307,31 +1363,17 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		if (expr->reference && expr->reference->comp_count > 0) {
 			strcpy(refname, expr->reference->components[0].name);
 		}
-		asn1extract_columns(expr, proto_module, mod->source_file_name);
-//		asn1extract_columns_correct(expr, proto_module, mod->source_file_name);
-//		fprintf(stderr, "Number of gathered messages is %d\n", proto_module->messages);
-//		for (int i = 0; i < (int) proto_module->messages; i++) {
-//			fprintf(stderr, "Gathered message[%d] is %s with %d elements, %d oneofs and %d nesteds\n",
-//					i, proto_module->message[i]->name, proto_module->message[i]->entries, proto_module->message[i]->oneofs, proto_module->message[i]->nesteds);
-//			for (int j = 0; j < (int) proto_module->message[i]->entries; j++) {
-//				fprintf(stderr, "Gathered entry[%d] is %s of type %s\n", i,
-//						proto_module->message[i]->entry[j]->name, proto_module->message[i]->entry[j]->type);
-//			}
-//			for (int j = 0; j < (int) proto_module->message[i]->oneofs; j++) {
-//				fprintf(stderr, "Gathered OneOf message[%d] is %s, it has following entries\n", i, proto_module->message[i]->oneof[j]->name);
-//				for (int k = 0; k < (int) proto_module->message[i]->oneof[j]->entries; k++) {
-//					fprintf(stderr, "Gathered OneOf entry[%d] is %s of type %s\n",
-//							i, proto_module->message[i]->oneof[j]->entry[k]->name, proto_module->message[i]->oneof[j]->entry[k]->type);
-//				}
-//			}
-//			for (int j = 0; j < (int) proto_module->message[i]->nesteds; j++) {
-//				fprintf(stderr, "Gathered nested message[%d] is %s. It has following entries:\n", i, proto_module->message[i]->nested[j]->name);
-//				for (int k = 0; k < (int) proto_module->message[i]->nested[j]->entries; k++) {
-//					fprintf(stderr, "Gathered nested entry[%d] is %s of type %s\n",
-//							i, proto_module->message[i]->nested[j]->entry[k]->name, proto_module->message[i]->nested[j]->entry[k]->type);
-//				}
-//			}
-//		}
+		struct asn1p_expr_s *asntree = NULL;
+		if (asn->modules.tq_head != NULL) {
+			if (asn->modules.tq_head->members.tq_head != NULL) {
+				asntree = asn->modules.tq_head->members.tq_head;
+			}
+		}
+		if (asntree != NULL) {
+			process_class_referenced_message(expr, proto_module, asntree, 1);
+		} else {
+			process_class_referenced_message(expr, proto_module, expr, 1);
+		}
 		return 0;
 	} else {
 		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -2235,105 +2277,9 @@ asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_
 	return 0;
 }
 
-// ToDo - this function would be reworked later to handle VALUE SET better
-//// This function processes value set and creates a message (or set of messages per definition).
-//// We are assuming that value set is defined through the class, thus we need to treat it as OneOf (almost certainly in
-//// canonical ordering).
-//// ASN.1 tree doesn't contain proper naming of the referred fields, i.e., referred types in Functions message from
-//// 18a-class-OK.asn1 file are not populated. Assuming that the fields are of the same class.
-//// Algorithm to process such messages is following:
-//// - Firstly, we iterate over the fields of the Class and check, whether there is a UNIQUE field. It will help to
-//// navigate over the referred messages.
-//// In case there is no UNIQUE field (which is present 99% of time), falling back and processing structure in the legacy
-//// way (with asn1extract_columns() function).
-//// - Once the UNIQUE field is found, we're composing message. It has structure of a CLASS, with the only one field,
-//// which is represented with yet another message of OneOf type (CHOICE in canonical ordering).
-//// -- To do so, we iterate over the fields of CLASS and trying to understand, which field doesn't have defined type
-//static int
-//asn1extract_columns_correct(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file) {
-//	char comment[PROTO_COMMENTS_CHARS] = {};
-//	char msgname[PROTO_NAME_CHARS] = {};
-//
-//	strcpy(comment, "concrete instance(s) of class ");
-//	if (expr->reference != NULL && expr->reference->comp_count > 0) {
-//		strcat(comment, expr->reference->components->name);
-//	}
-//	strcat(comment, " from \%s:\%d");
-//	strcat(msgname, "_");
-//	strcat(msgname, expr->Identifier);
-//
-//	proto_msg_t *proto_msg = proto_create_message(msgname, expr->spec_index, expr->_type_unique_index, comment,
-//													  mod_file, expr->_lineno, 0);
-//
-//	proto_msg_oneof_t *oneof = proto_create_msg_oneof(msgname, "choice from %s:%d", expr->module->source_file_name,
-//													  expr->_lineno);
-//
-//	int rowIdx = 0;
-//	int colIdx = 0;
-//	char instanceName[PROTO_NAME_CHARS] = {};
-//	proto_msg_t *submsg = NULL;
-//	for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
-//		asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
-//		// gathering CHOICE options here inside OneOf (will be encapsulated
-//		// as an element inside proto_msg later)
-//
-//		// ToDo - the question is, where to get the name for the referenced type??
-//		proto_msg_def_t *oneofElem = proto_create_msg_elem("value", "int32", NULL);
-//
-//		// Each row goes describes the referred structure inside, e.g., we have a following VALUE SET:
-//		// {operator-plus | operator-square | operator-root}
-//		// It has three rows, namely operator-plus, operator-square, operator-root. Each of them is a separate message itself.
-//		// Each row has a set of fields. Amount of fields may vary. For instance, in case of CLASS definition, number of fields
-//		// would be equal to a number of fields in CLASS. TODO: In case of a basic types, field number should be equal to 1??
-//		// Structure is described per class definition, if it exists..
-//		fprintf(stderr, "Iterating over field of colij %d\n", rowIdx);
-//		for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
-//			struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
-//
-////			fprintf(stderr, "Field name %s, meta_type %s, expr_type %s, unique %d, flags %s\n",
-////					colij.field->Identifier, colij.field->meta_type, colij.field->expr_type, colij.field->unique, colij.field->marker.flags);
-////			fprintf(stderr, "Value name %s, meta_type %s, expr_type %s, unique %d, flags %s\n",
-////					colij.value->Identifier, colij.value->meta_type, colij.value->expr_type, colij.value->unique, colij.value->marker.flags);
-//
-//			if (colij.value->meta_type == AMT_VALUE && colij.value->expr_type == ASN_BASIC_INTEGER) {
-//				long lb = get_lowerbound(colij.value->value->value.constraint);
-//				long ub = get_upperbound(colij.value->value->value.constraint);
-//				fprintf(stderr, "Lowerbound is %ld, Upperbound is %ld\n", lb, ub);
-//			}
-//
-//			// gathering message elements for new_proto_msg (it's enough to have one rotation here, since
-//			// all elements are of the same CLASS). In case there will be UNIQUE field, corresponding list creation
-//			// should be triggered from here... Maybe rotating over all elements will help to build a Canonical Ordering
-//			// for this CHOICE
-//			int choiceType = 0; // this is to understand if the field is the one which can vary (the one interpreted as CHOICE)
-//
-//			char temptype[PROTO_TYPE_CHARS] = {};
-//			char rules[PROTO_RULES_CHARS] = {};
-//
-//			// colij.field->Identifier contains CLASS structure representation
-//			// colij.value->Identifier contains structure type representation, e.g., INTEGER, REAL or any other referenced type..
-//			proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier, colij.value->Identifier, NULL);
-//
-//			if (choiceType == 0) {
-//				proto_msg_add_elem(proto_msg, elem);
-//			}
-//		}
-//
-//		proto_msg_add_elem(oneof, oneofElem);
-//	}
-//
-//	proto_messages_add_msg(proto_module, proto_msg);
-//	// Also, add a CHOICE to the new_proto_msg and create a new message, where we'll encapsulate OneOf
-//	proto_msg_t *msgOneOf = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
-//											"value set interpreted as choice from %s:%d", expr->module->source_file_name, expr->_lineno, 0);
-//	proto_msg_add_oneof(msgOneOf, oneof);
-//	proto_messages_add_msg(proto_module, msgOneOf);
-//	return 0;
-//}
-
 // This function creates a message for a standalone message defined through the CLASS
 static int
-process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, char *mod_file) {
+process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, int isValueSet) {
 	char comment[PROTO_COMMENTS_CHARS] = {};
 	char msgname[PROTO_NAME_CHARS] = {};
 
@@ -2345,116 +2291,437 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 	strcat(msgname, expr->Identifier);
 
 	proto_msg_t *msg = proto_create_message(msgname, expr->spec_index, expr->_type_unique_index, comment,
-												  mod_file, expr->_lineno, 0);
+											expr->module->source_file_name, expr->_lineno, 0);
 
-//	int unique = 0;
-	int rowIdx = 0;
-	int colIdx = 0;
-	for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
-		asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+	// In case we are processing VALUE SET, firstly, search if any other message has
+	// the same signature and then reference it. Otherwise, process it as anonymous VALUE SET (the one which
+	// has nested definition, same as nested SEQUENCE or nested ENUMERATED)
+	if (isValueSet) {
+		// defining in case we need to compose a VALUE SET later..
+		proto_msg_t *msgOneOf = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
+													 "value set from %s:%d", expr->module->source_file_name, expr->_lineno, 0);
+		proto_msg_oneof_t *oneof = proto_create_msg_oneof(expr->Identifier,
+														  "value set translated as choice from %s:%d", expr->module->source_file_name, expr->_lineno);
 
-		for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
-			struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+		int rowIdx = 0;
+		int counter = 0;
+		// computing how many referenced structs are inside the VALUE SET
+		for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+			asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 
-			proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier, "int32", NULL);
-			if (colij.value != NULL) {
-				if (colij.value->reference != NULL) {
-					strcpy(elem->type, colij.value->reference->components->name);
-					// parsing extensibility here
-					int oneOfDependent = 0;
-					int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
-																   &oneOfDependent);
-					if (isExtensible == 1 && oneOfDependent == 0) {
-						elem->tags.valueExt = 1;
-					} else if (isExtensible == 1 && oneOfDependent == 1) {
-						elem->tags.choiceExt = 1;
-					}
-					// make sure that the type is enumerator
-					int enm = 0;
-					int elCount = -1;
-					enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+			char *refName = NULL;
+			refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
 
-					if (enm) {
-						if (elCount != -1) {
-							elem->tags.valueUB = elCount;
+			if (refName != NULL && strcmp(refName, "") != 0) {
+				// Found referenced message -> increasing counter
+				counter++;
+			}
+		}
+
+		if (counter == expr->ioc_table->rows) {
+			// compose message as a regular choice
+			rowIdx = 0;
+			for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+				asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+
+				char *refName = NULL;
+				refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
+				proto_msg_def_t *elem = proto_create_msg_elem(refName, refName, NULL);
+				proto_msg_add_elem((proto_msg_t *) oneof, elem);
+			}
+			proto_msg_add_oneof(msgOneOf, oneof);
+			proto_messages_add_msg(proto_module, msgOneOf);
+		} else {
+			// compose a message as a value set with one item treated as a (canonical) choice
+			int unique = 0;
+			rowIdx = 0;
+			int colIdx = 0;
+			// we want to iterate over the CLASS structure itself, function below will return unique presence
+			// and name of the part which is treated as choice
+			char *choicePart = malloc(PROTO_COMMENTS_CHARS);
+			memset(choicePart, 0, PROTO_COMMENTS_CHARS);
+			int res = process_referenced_class(expr->reference->components->name, asntree, &unique, choicePart);
+
+			if (res != 0) {
+				// now we should.. compose the message structure:
+				//  - start with filling in the choice part of the message. It should be put as a separate message
+				//  - fill in a skeleton of the main message, where we will include in the main part a choice message..
+
+				// firstly composing choice message
+				// verifying if choice part was found in the CLASS definition.
+				// If it wasn't, sticking to regular choice message
+				if (strcmp("", choicePart) != 0) {
+					// choice part was found!
+					for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+						colIdx = 0;
+						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+							if (strcmp(colij.field->Identifier, choicePart) == 0) {
+								// colij.value->Identifier must be present, otherwise anonymous value set can't be defined
+								proto_msg_def_t *elem = proto_create_msg_elem(colij.value->Identifier,
+																			  colij.value->Identifier, NULL);
+
+								// parsing extensibility here
+								int oneOfDependent = 0;
+								int isExtensible = structure_is_extensible(asntree,
+																		   colij.value->Identifier,
+																		   &oneOfDependent);
+								if (isExtensible == 1 && oneOfDependent == 0) {
+									elem->tags.valueExt = 1;
+								} else if (isExtensible == 1 && oneOfDependent == 1) {
+									elem->tags.choiceExt = 1;
+								}
+								// make sure that the type is enumerator
+								int enm = 0;
+								int elCount = -1;
+								enm = is_enum(asntree, colij.value->Identifier, &elCount);
+
+								if (enm) {
+									if (elCount != -1) {
+										elem->tags.valueUB = elCount;
+									}
+									elem->tags.valueLB = 0;
+								}
+								proto_msg_add_elem((proto_msg_t *) oneof, elem);
+							}
 						}
-						elem->tags.valueLB = 0;
+					}
+					strcat(msgOneOf->name, choicePart);
+					proto_msg_add_oneof(msgOneOf, oneof);
+					proto_messages_add_msg(proto_module, msgOneOf);
+
+					// now, when choice is added, composing a value set skeleton
+					rowIdx = 0;
+					for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+						colIdx = 0;
+						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+							if (strcmp(colij.field->Identifier, choicePart) == 0) {
+								// adding our new choice here
+								proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier,
+																			  msgOneOf->name, NULL);
+								if (unique) {
+									elem->tags.canonicalOrder = 1;
+								}
+								proto_msg_add_elem(msg, elem);
+							} else {
+								proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier,
+																			  colij.value->reference->components->name, NULL);
+								// parsing extensibility here
+								int oneOfDependent = 0;
+								int isExtensible = structure_is_extensible(asntree,
+																		   colij.value->reference->components->name,
+																		   &oneOfDependent);
+								if (isExtensible == 1 && oneOfDependent == 0) {
+									elem->tags.valueExt = 1;
+								} else if (isExtensible == 1 && oneOfDependent == 1) {
+									elem->tags.choiceExt = 1;
+								}
+								// make sure that the type is enumerator
+								int enm = 0;
+								int elCount = -1;
+								enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+
+								if (enm) {
+									if (elCount != -1) {
+										elem->tags.valueUB = elCount;
+									}
+									elem->tags.valueLB = 0;
+								}
+
+								// checking whether there is a unique field
+								if (colij.field->unique) {
+									elem->tags.unique = 1;
+								}
+
+								proto_msg_add_elem(msg, elem);
+							}
+						}
+						// one iteration is enough - VALUE SET is defined through the same CLASS, and
+						// CLASS fields are all the same
+						break;
 					}
 				} else {
-					// ToDo - fix handling of AMT_VALUE vs AMT_TYPE
-					//  - AMT_VALUE is used to indicate that the object in the field is a value, not a type.
-					//  In other words, it's a constant.
-					//  - AMT_TYPE is used to indicate that the object in the field defined through a type,
-					//  e.g., INTEGER, and values of that type may vary.
-					//  What would be the correct way to parse constraints of the class fields then?
-					if (colij.value->expr_type == ASN_STRING_IA5String ||
-													colij.value->expr_type == ASN_STRING_BMPString ||
-													colij.value->expr_type == ASN_STRING_PrintableString) {
-						strcpy(elem->type, "string");
-					} else if (colij.value->expr_type == ASN_BASIC_BOOLEAN) {
-						strcpy(elem->type, "bool");
-					} else if (colij.value->expr_type == ASN_BASIC_BIT_STRING) {
-						strcpy(elem->type, "asn1.v1.BitString");
-					} else if (colij.value->expr_type == ASN_BASIC_OCTET_STRING) {
-						strcpy(elem->type, "bytes");
-					} else if (colij.value->expr_type == ASN_BASIC_REAL) {
-						strcpy(elem->type, "float");
-					}
-					// ToDo - extensibility and LB and UB (for strings, integers and bytes)
-					//  should be parsed in different way..
-					if (colij.value->meta_type == AMT_VALUE && colij.value->value != NULL) {
-						char rules[PROTO_RULES_CHARS] = {};
-						const char *pval = asn1f_printable_value(colij.value->value);
-						switch (colij.value->value->type) {
-							case ATV_INTEGER:
-								if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
-									(long) (colij.value->value->value.v_integer) < -2147483647) {
-									snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
-											 (int) (colij.value->value->value.v_integer));
-									strcpy(elem->type, "int64");
-								} else {
-									snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
-											 (int) (colij.value->value->value.v_integer));
+					// choice part was not found, composing regular choice message
+					for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+						colIdx = 0;
+						char *refName = NULL;
+						refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
+
+						if (refName != NULL && strcmp(refName, "") != 0) {
+							// Found referenced message -> adding it as an element.
+							// The message itself would be composed later
+							proto_msg_def_t *elem = proto_create_msg_elem(refName,
+																		  refName, NULL);
+							proto_msg_add_elem((proto_msg_t *) oneof, elem);
+						} else {
+							// no reference message was found. Composing nested message
+							proto_msg_t *nestedMsg = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index, comment,
+																		  expr->module->source_file_name, expr->_lineno, 0);
+							sprintf(nestedMsg->name, "%s%03d", expr->Identifier, rowIdx);
+
+							colIdx = 0;
+							for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+								struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+
+								proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier, "int32", NULL);
+								if (colij.value != NULL) {
+									if (colij.value->reference != NULL) {
+										strcpy(elem->type, colij.value->reference->components->name);
+										// parsing extensibility here
+										int oneOfDependent = 0;
+										int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
+																				   &oneOfDependent);
+										if (isExtensible == 1 && oneOfDependent == 0) {
+											elem->tags.valueExt = 1;
+										} else if (isExtensible == 1 && oneOfDependent == 1) {
+											elem->tags.choiceExt = 1;
+										}
+										// make sure that the type is enumerator
+										int enm = 0;
+										int elCount = -1;
+										enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+
+										if (enm) {
+											if (elCount != -1) {
+												elem->tags.valueUB = elCount;
+											}
+											elem->tags.valueLB = 0;
+										}
+									} else {
+										long lb = -1;
+										long ub = -1;
+										if (colij.value->meta_type == AMT_VALUE) {
+											if (colij.field->members.tq_head != NULL) {
+												if (colij.field->members.tq_head->constraints != NULL) {
+													lb = get_lowerbound(colij.field->members.tq_head->constraints);
+													ub = get_upperbound(colij.field->members.tq_head->constraints);
+												}
+											}
+										}
+
+										if (colij.value->expr_type == ASN_STRING_IA5String ||
+											colij.value->expr_type == ASN_STRING_BMPString ||
+											colij.value->expr_type == ASN_STRING_PrintableString) {
+											strcpy(elem->type, "string");
+											if (lb != -1) {
+												elem->tags.sizeLB = lb;
+											}
+											if (ub != -1) {
+												elem->tags.sizeUB = ub;
+											}
+										} else if (colij.value->expr_type == ASN_BASIC_BOOLEAN) {
+											strcpy(elem->type, "bool");
+										} else if (colij.value->expr_type == ASN_BASIC_BIT_STRING) {
+											strcpy(elem->type, "asn1.v1.BitString");
+											if (lb != -1) {
+												elem->tags.sizeLB = lb;
+											}
+											if (ub != -1) {
+												elem->tags.sizeUB = ub;
+											}
+										} else if (colij.value->expr_type == ASN_BASIC_OCTET_STRING) {
+											strcpy(elem->type, "bytes");
+											if (lb != -1) {
+												elem->tags.sizeLB = lb;
+											}
+											if (ub != -1) {
+												elem->tags.sizeUB = ub;
+											}
+										} else if (colij.value->expr_type == ASN_BASIC_REAL) {
+											strcpy(elem->type, "float");
+										} else if (colij.value->expr_type == ASN_BASIC_INTEGER) {
+											if (lb != -1) {
+												elem->tags.valueLB = lb;
+											}
+											if (ub != -1) {
+												elem->tags.valueUB = ub;
+											}
+										}
+										// Extensibility and LB and UB (for strings, integers and bytes)
+										// is possible to get from field->members->tq_head->constraints->elements
+										if (colij.value->meta_type == AMT_VALUE && colij.value->value != NULL) {
+											char rules[PROTO_RULES_CHARS] = {};
+											const char *pval = asn1f_printable_value(colij.value->value);
+											switch (colij.value->value->type) {
+												case ATV_INTEGER:
+													if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
+														(long) (colij.value->value->value.v_integer) < -2147483647) {
+														snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
+																 (int) (colij.value->value->value.v_integer));
+														strcpy(elem->type, "int64");
+													} else {
+														snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
+																 (int) (colij.value->value->value.v_integer));
+													}
+													break;
+												case ATV_STRING:
+												case ATV_UNPARSED:
+													snprintf(rules, PROTO_RULES_CHARS, "string.const = '%s'", pval);
+													break;
+												default:
+													fprintf(stderr, "Unhandled value type %d %s\n", colij.value->value->type, pval);
+													break;
+											}
+											strcpy(elem->rules, rules);
+										}
+									}
 								}
-								break;
-							case ATV_STRING:
-							case ATV_UNPARSED:
-								snprintf(rules, PROTO_RULES_CHARS, "string.const = '%s'", pval);
-								break;
-							default:
-								fprintf(stderr, "Unhandled value type %d %s\n", colij.value->value->type, pval);
-								break;
+								if (colij.field->unique) {
+									elem->tags.unique = 1;
+								}
+								if (colij.field->marker.flags == EM_OPTIONAL) {
+									elem->tags.optional = 1;
+								}
+								proto_msg_add_elem(nestedMsg, elem);
+							}
+							proto_messages_add_msg(proto_module, nestedMsg);
+							proto_msg_def_t *elem = proto_create_msg_elem(nestedMsg->name,
+																		  nestedMsg->name, NULL);
+							proto_msg_add_elem((proto_msg_t *) oneof, elem);
+
 						}
-						strcpy(elem->rules, rules);
+					}
+					proto_msg_add_oneof(msgOneOf, oneof);
+					proto_messages_add_msg(proto_module, msgOneOf);
+				}
+			}
+		}
+		proto_messages_add_msg(proto_module, msg);
+	} else {
+		int rowIdx = 0;
+		int colIdx = 0;
+		for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
+			asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
+
+			for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+				struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+
+				proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier, "int32", NULL);
+				if (colij.value != NULL) {
+					if (colij.value->reference != NULL) {
+						strcpy(elem->type, colij.value->reference->components->name);
+						// parsing extensibility here
+						int oneOfDependent = 0;
+						int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
+																   &oneOfDependent);
+						if (isExtensible == 1 && oneOfDependent == 0) {
+							elem->tags.valueExt = 1;
+						} else if (isExtensible == 1 && oneOfDependent == 1) {
+							elem->tags.choiceExt = 1;
+						}
+						// make sure that the type is enumerator
+						int enm = 0;
+						int elCount = -1;
+						enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+
+						if (enm) {
+							if (elCount != -1) {
+								elem->tags.valueUB = elCount;
+							}
+							elem->tags.valueLB = 0;
+						}
+					} else {
+						// What is the difference in handling of AMT_VALUE vs AMT_TYPE?
+						//  - AMT_VALUE is used to indicate that the object in the field is a value, not a type.
+						//  In other words, it's a constant.
+						//  - AMT_TYPE is used to indicate that the object in the field defined through a type,
+						//  e.g., INTEGER, and values of that type may vary.
+
+						long lb = -1;
+						long ub = -1;
+						if (colij.value->meta_type == AMT_VALUE) {
+							if (colij.field->members.tq_head != NULL) {
+								if (colij.field->members.tq_head->constraints != NULL) {
+									lb = get_lowerbound(colij.field->members.tq_head->constraints);
+									ub = get_upperbound(colij.field->members.tq_head->constraints);
+								}
+							}
+						}
+
+						if (colij.value->expr_type == ASN_STRING_IA5String ||
+							colij.value->expr_type == ASN_STRING_BMPString ||
+							colij.value->expr_type == ASN_STRING_PrintableString) {
+							strcpy(elem->type, "string");
+							if (lb != -1) {
+								elem->tags.sizeLB = lb;
+							}
+							if (ub != -1) {
+								elem->tags.sizeUB = ub;
+							}
+						} else if (colij.value->expr_type == ASN_BASIC_BOOLEAN) {
+							strcpy(elem->type, "bool");
+						} else if (colij.value->expr_type == ASN_BASIC_BIT_STRING) {
+							strcpy(elem->type, "asn1.v1.BitString");
+							if (lb != -1) {
+								elem->tags.sizeLB = lb;
+							}
+							if (ub != -1) {
+								elem->tags.sizeUB = ub;
+							}
+						} else if (colij.value->expr_type == ASN_BASIC_OCTET_STRING) {
+							strcpy(elem->type, "bytes");
+							if (lb != -1) {
+								elem->tags.sizeLB = lb;
+							}
+							if (ub != -1) {
+								elem->tags.sizeUB = ub;
+							}
+						} else if (colij.value->expr_type == ASN_BASIC_REAL) {
+							strcpy(elem->type, "float");
+						} else if (colij.value->expr_type == ASN_BASIC_INTEGER) {
+							if (lb != -1) {
+								elem->tags.valueLB = lb;
+							}
+							if (ub != -1) {
+								elem->tags.valueUB = ub;
+							}
+						}
+						// Extensibility and LB and UB (for strings, integers and bytes)
+						// is possible to get from field->members->tq_head->constraints->elements
+						if (colij.value->meta_type == AMT_VALUE && colij.value->value != NULL) {
+							char rules[PROTO_RULES_CHARS] = {};
+							const char *pval = asn1f_printable_value(colij.value->value);
+							switch (colij.value->value->type) {
+								case ATV_INTEGER:
+									if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
+										(long) (colij.value->value->value.v_integer) < -2147483647) {
+										snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
+												 (int) (colij.value->value->value.v_integer));
+										strcpy(elem->type, "int64");
+									} else {
+										snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
+												 (int) (colij.value->value->value.v_integer));
+									}
+									break;
+								case ATV_STRING:
+								case ATV_UNPARSED:
+									snprintf(rules, PROTO_RULES_CHARS, "string.const = '%s'", pval);
+									break;
+								default:
+									fprintf(stderr, "Unhandled value type %d %s\n", colij.value->value->type, pval);
+									break;
+							}
+							strcpy(elem->rules, rules);
+						}
 					}
 				}
-			} else {
-				// This is a type which is left undefined - could be the one, which should be defined through OneOf in VALUE SET
-			}
 
-			if (colij.field->unique) {
-				elem->tags.unique = 1;
-//				unique = 1;
+				if (colij.field->unique) {
+					elem->tags.unique = 1;
+				}
+				if (colij.field->marker.flags == EM_OPTIONAL) {
+					elem->tags.optional = 1;
+				}
+				proto_msg_add_elem(msg, elem);
 			}
-			if (colij.field->marker.flags == EM_OPTIONAL) {
-				elem->tags.optional = 1;
-			}
-
-//			fprintf(stderr, "Field name %s, meta_type %s, expr_type %s, unique %d, flags %s\n",
-//					colij.field->Identifier, colij.field->meta_type, colij.field->expr_type, colij.field->unique, colij.field->marker.flags);
-//			fprintf(stderr, "Value name %s, meta_type %s, expr_type %s, unique %d, flags %s\n",
-//					colij.value->Identifier, colij.value->meta_type, colij.value->expr_type, colij.value->unique, colij.value->marker.flags);
-
-//			if (colij.value->meta_type == AMT_VALUE && colij.value->expr_type == ASN_BASIC_INTEGER) {
-//				long lb = get_lowerbound(colij.value->value->value.constraint);
-//				long ub = get_upperbound(colij.value->value->value.constraint);
-//				fprintf(stderr, "Lowerbound is %ld, Upperbound is %ld\n", lb, ub);
-//			}
-			proto_msg_add_elem(msg, elem);
 		}
+		proto_messages_add_msg(proto_module, msg);
 	}
 
-	proto_messages_add_msg(proto_module, msg);
 	return 0;
 }
 
@@ -2595,4 +2862,95 @@ proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags, long *bo
 	assert(val->type || !"Unknown");
 
 	return result;
+}
+
+// this function returns a name of the referenced message, which is defined through CLASS
+static char *
+find_referenced_message(char *class_name, asn1p_expr_t *expr, asn1p_ioc_row_t *referenced_fields) {
+
+	char *msgname = malloc(PROTO_COMMENTS_CHARS);
+	memset(msgname, 0, PROTO_COMMENTS_CHARS);
+
+	if (expr->meta_type == AMT_VALUE && expr->expr_type == A1TC_REFERENCE) {
+		if (expr->reference != NULL) {
+			if (strcmp(expr->reference->components->name, class_name) == 0) {
+				// found message of the same class
+				if (expr->ioc_table->rows == 1) {
+					asn1p_ioc_row_t *table_row = expr->ioc_table->row[0];
+
+					if (table_row->columns == referenced_fields->columns) {
+						int match = 0; // to store number of matched fields
+						int colIdx = 0;
+						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+							struct asn1p_ioc_cell_s ref_colij = referenced_fields->column[colIdx];
+
+							if (strcmp(colij.field->Identifier, ref_colij.field->Identifier) == 0 &&
+									colij.field->meta_type == ref_colij.field->meta_type &&
+									colij.field->expr_type == ref_colij.field->expr_type) {
+								if (colij.value != NULL && ref_colij.value != NULL) {
+									if (strcmp(colij.value->Identifier, ref_colij.value->Identifier) == 0 &&
+										colij.value->meta_type == ref_colij.value->meta_type &&
+										colij.value->expr_type == ref_colij.value->expr_type) {
+										match++;
+									}
+								} else {
+									match++;
+								}
+							}
+						}
+						if (match == referenced_fields->columns) {
+							strcat(msgname, expr->Identifier);
+							return msgname;
+						} else {
+							if (expr->next.tq_next != NULL) {
+								struct asn1p_expr_s *next = expr->next.tq_next;
+								char *msgname1 = NULL;
+								msgname1 = find_referenced_message(class_name, next, referenced_fields);
+								return msgname1;
+							}
+						}
+					} else {
+						if (expr->next.tq_next != NULL) {
+							struct asn1p_expr_s *next = expr->next.tq_next;
+							char *msgname1 = NULL;
+							msgname1 = find_referenced_message(class_name, next, referenced_fields);
+							return msgname1;
+						}
+					}
+				} else {
+					if (expr->next.tq_next != NULL) {
+						struct asn1p_expr_s *next = expr->next.tq_next;
+						char *msgname1 = NULL;
+						msgname1 = find_referenced_message(class_name, next, referenced_fields);
+						return msgname1;
+					}
+				}
+			} else {
+				if (expr->next.tq_next != NULL) {
+					struct asn1p_expr_s *next = expr->next.tq_next;
+					char *msgname1 = NULL;
+					msgname1 = find_referenced_message(class_name, next, referenced_fields);
+					return msgname1;
+				}
+			}
+		} else {
+			if (expr->next.tq_next != NULL) {
+				struct asn1p_expr_s *next = expr->next.tq_next;
+				char *msgname1 = NULL;
+				msgname1 = find_referenced_message(class_name, next, referenced_fields);
+				return msgname1;
+			}
+		}
+	} else {
+		if (expr->next.tq_next != NULL) {
+			struct asn1p_expr_s *next = expr->next.tq_next;
+			char *msgname1 = NULL;
+			msgname1 = find_referenced_message(class_name, next, referenced_fields);
+			return msgname1;
+		}
+	}
+
+
+	return msgname;
 }

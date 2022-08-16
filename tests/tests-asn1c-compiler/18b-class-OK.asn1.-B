@@ -22,6 +22,31 @@ enum Presence {
     PRESENCE_MANDATORY = 1;
 };
 
+// value set from 18b-class-OK.asn1:14
+// {Functions&ArgType}
+message FunctionsArgType {
+    // value set translated as choice from 18b-class-OK.asn1:14
+    oneof functions {
+        // @inject_tag: aper:"choiceIdx:1,valueExt,"
+        Type1 type1 = 1 [ json_name="Type1"];
+        // @inject_tag: aper:"choiceIdx:2,choiceExt,"
+        Type2 type2 = 2 [ json_name="Type2"];
+    }
+};
+
+// concrete instance(s) of class FUNCTION from 18b-class-OK.asn1:14
+// {Functions}
+message Functions {
+    // @inject_tag: aper:"unique,"
+    CodeId code = 1 [ json_name="&code"];
+    // @inject_tag: aper:"canonicalOrder,"
+    FunctionsArgType arg_type = 2 [ json_name="&ArgType"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 3 [ json_name="&presence"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 4 [ json_name="&criticality"];
+};
+
 // concrete instance(s) of class FUNCTION from 18b-class-OK.asn1:19
 // {operator1}
 message Operator1 {
