@@ -1,0 +1,174 @@
+////////////////////// moduletestclass.proto //////////////////////
+// Protobuf generated from /18d-class-OK.asn1 by asn1c-0.9.29
+// ModuleTestClass { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 18 }
+
+syntax = "proto3";
+
+package pkg18d_class_ok.v1;
+option go_package = "pkg18d_class_ok/v1/moduletestclass;moduletestclass";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+
+// enumerated from 18d-class-OK.asn1:56
+enum Criticality {
+    CRITICALITY_HIGH = 0;
+    CRITICALITY_LOW = 1;
+};
+
+// enumerated from 18d-class-OK.asn1:62
+enum Presence {
+    PRESENCE_OPTIONAL = 0;
+    PRESENCE_MANDATORY = 1;
+};
+
+// sequence from 18d-class-OK.asn1:18
+// @inject_tag: aper:"valueExt"
+// {Response}
+message Response {
+    // @inject_tag: aper:"sizeLB:0,sizeUB:16,"
+    repeated ResponseIEs ies = 1 [ json_name="ies"];
+};
+
+// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// {Response-IEs000}
+message ResponseIEs000 {
+    // @inject_tag: aper:"unique,"
+    CodeId id = 1 [ json_name="&id"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 2 [ json_name="&criticality"];
+    Operator1 value = 3 [ json_name="&Value"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 4 [ json_name="&presence"];
+};
+
+// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// {Response-IEs001}
+message ResponseIEs001 {
+    // @inject_tag: aper:"unique,"
+    CodeId id = 1 [ json_name="&id"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 2 [ json_name="&criticality"];
+    Operator2 value = 3 [ json_name="&Value"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 4 [ json_name="&presence"];
+};
+
+// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// {Response-IEs002}
+message ResponseIEs002 {
+    // @inject_tag: aper:"unique,"
+    CodeId id = 1 [ json_name="&id"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 2 [ json_name="&criticality"];
+    Operator3 value = 3 [ json_name="&Value"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 4 [ json_name="&presence"];
+};
+
+// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// {Response-IEs003}
+message ResponseIEs003 {
+    // @inject_tag: aper:"unique,"
+    CodeId id = 1 [ json_name="&id"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 2 [ json_name="&criticality"];
+    Operator4 value = 3 [ json_name="&Value"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Presence presence = 4 [ json_name="&presence"];
+};
+
+// value set from 18d-class-OK.asn1:22
+// {Response-IEs}
+message ResponseIEs {
+    // value set translated as choice from 18d-class-OK.asn1:22
+    oneof response_ies {
+        // @inject_tag: aper:"choiceIdx:1,"
+        ResponseIEs000 response_ies000 = 1 [ json_name="Response-IEs000"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        ResponseIEs001 response_ies001 = 2 [ json_name="Response-IEs001"];
+        // @inject_tag: aper:"choiceIdx:3,"
+        ResponseIEs002 response_ies002 = 3 [ json_name="Response-IEs002"];
+        // @inject_tag: aper:"choiceIdx:4,"
+        ResponseIEs003 response_ies003 = 4 [ json_name="Response-IEs003"];
+    }
+};
+
+// sequence from 18d-class-OK.asn1:45
+// Param IE-DEFINITION:IEsSetParam
+// {Response-Container001}
+message ResponseContainer001 {
+    // @inject_tag: aper:""
+    repeated ResponseIEs value = 1 [ json_name="value"];
+};
+
+// sequence from 18d-class-OK.asn1:48
+// Param IE-DEFINITION:IEsSetParam
+// {IE-Field001}
+message IeField001 {
+    ResponseIEs id = 1 [ json_name="id"];
+    ResponseIEs criticality = 2 [ json_name="criticality"];
+    ResponseIEs value = 3 [ json_name="value"];
+};
+
+// range of Integer from 18d-class-OK.asn1:53
+// {CodeID}
+message CodeId {
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:128,"
+    int32 value = 1 [(validate.v1.rules).int32 = {gte: 0, lte: 128}, json_name="value"];
+};
+
+// range of Integer from 18d-class-OK.asn1:67
+// {Operator1}
+message Operator1 {
+    bytes value = 1 [ json_name="value"];
+};
+
+// range of Integer from 18d-class-OK.asn1:68
+// {Operator2}
+message Operator2 {
+    // @inject_tag: aper:"valueExt,valueLB:1,valueUB:32,"
+    int32 value = 1 [(validate.v1.rules).int32 = {gte: 1, lte: 32}, json_name="value"];
+};
+
+// range of Integer from 18d-class-OK.asn1:69
+// {Operator3}
+message Operator3 {
+    // @inject_tag: aper:"sizeExt,sizeLB:1,sizeUB:150,"
+    string value = 1 [(validate.v1.rules).string = {min_len: 1, max_len: 150}, json_name="value"];
+};
+
+// range of Integer from 18d-class-OK.asn1:72
+// {Operator4}
+message Operator4 {
+    asn1.v1.BitString value = 1 [ json_name="value"];
+};
+
+// reference from 18d-class-OK.asn1:72
+// {id-operator1}
+message Idoperator1 {
+    // @inject_tag: aper:"valueLB:1,valueUB:1,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"]; // CodeID
+};
+
+// reference from 18d-class-OK.asn1:73
+// {id-operator2}
+message Idoperator2 {
+    // @inject_tag: aper:"valueLB:2,valueUB:2,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"]; // CodeID
+};
+
+// reference from 18d-class-OK.asn1:74
+// {id-operator3}
+message Idoperator3 {
+    // @inject_tag: aper:"valueLB:3,valueUB:3,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 3, json_name="value"]; // CodeID
+};
+
+// reference from 18d-class-OK.asn1:75
+// {id-operator4}
+message Idoperator4 {
+    // @inject_tag: aper:"valueLB:4,valueUB:4,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 4, json_name="value"]; // CodeID
+};
+

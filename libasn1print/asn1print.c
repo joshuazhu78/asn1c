@@ -220,29 +220,6 @@ asn1print_module(asn1p_t *asn, asn1p_module_t *mod, enum asn1print_flags flags) 
 				printf("Error in asn1print_expr_proto\n");
 				return ret;
 			}
-//			fprintf(stderr, "-----> Number of gathered messages is %d\n", proto_module->messages);
-//			for (int i = 0; i < (int) proto_module->messages; i++) {
-//				fprintf(stderr, "---> Gathered message[%d] is %s with %d elements, %d oneofs and %d nesteds\n",
-//						i, proto_module->message[i]->name, proto_module->message[i]->entries, proto_module->message[i]->oneofs, proto_module->message[i]->nesteds);
-//				for (int j = 0; j < (int) proto_module->message[i]->entries; j++) {
-//					fprintf(stderr, "Gathered entry[%d] is %s of type %s\n", i,
-//							proto_module->message[i]->entry[j]->name, proto_module->message[i]->entry[j]->type);
-//				}
-//				for (int j = 0; j < (int) proto_module->message[i]->oneofs; j++) {
-//					fprintf(stderr, "Gathered OneOf message[%d] is %s, it has following entries\n", i, proto_module->message[i]->oneof[j]->name);
-//					for (int k = 0; k < (int) proto_module->message[i]->oneof[j]->entries; k++) {
-//						fprintf(stderr, "Gathered OneOf entry[%d] is %s of type %s\n",
-//								i, proto_module->message[i]->oneof[j]->entry[k]->name, proto_module->message[i]->oneof[j]->entry[k]->type);
-//					}
-//				}
-//				for (int j = 0; j < (int) proto_module->message[i]->nesteds; j++) {
-//					fprintf(stderr, "Gathered nested message[%d] is %s. It has following entries:\n", i, proto_module->message[i]->nested[j]->name);
-//					for (int k = 0; k < (int) proto_module->message[i]->nested[j]->entries; k++) {
-//						fprintf(stderr, "Gathered nested entry[%d] is %s of type %s\n",
-//								i, proto_module->message[i]->nested[j]->entry[k]->name, proto_module->message[i]->nested[j]->entry[k]->type);
-//					}
-//				}
-//			}
 		}
 
 		proto_print_msg(proto_module, (enum asn1print_flags2) flags, 0, 1);

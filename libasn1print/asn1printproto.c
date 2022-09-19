@@ -64,6 +64,9 @@ static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module,
 static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, int isValueSet);
 static char *find_referenced_message(char *class_name, asn1p_expr_t *asntree, asn1p_ioc_row_t *referenced_fields);
 
+void find_and_process_referenced_type(const char *refType, asn1p_expr_t *tree, proto_msg_def_t *elem,
+									  proto_module_t *proto_module);
+
 static char *escapeQuotesDup(const char *original);
 
 /* Pedantically check fwrite's return value. */
@@ -822,6 +825,41 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 	}
 
 	return res;
+}
+
+void
+find_and_process_referenced_type(const char *refType, asn1p_expr_t *tree, proto_msg_def_t *elem,
+								 proto_module_t *proto_module) {
+
+	if (strcmp(tree->Identifier, refType) == 0) {
+		// found the referenced message, cloning it to the element
+		if (tree->expr_type == ASN_CONSTR_SEQUENCE_OF) {
+			elem->tags.repeated = 1;
+			int lb = get_lowerbound(tree->constraints);
+			if (lb != -1) {
+				elem->tags.sizeLB = lb;
+			}
+			int ub = get_upperbound(tree->constraints);
+			if (ub != -1) {
+				elem->tags.sizeUB = ub;
+			}
+			int extensibility;
+			extensibility = get_extensibility(tree->constraints);
+			if (extensibility) {
+				elem->tags.sizeExt = 1;
+			}
+		}
+		// ToDo - add handling of other types..
+		return;
+	} else {
+		if (tree->next.tq_next != NULL) {
+			asn1p_expr_t *newtree = tree->next.tq_next;
+			find_and_process_referenced_type(refType, newtree, elem, proto_module);
+			return;
+		}
+	}
+
+	return;
 }
 
 static int
@@ -1772,39 +1810,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 //							se->expr_type, se->meta_type, expr->Identifier, se->Identifier);
 //				}
 			} else if (se->expr_type == A1TC_REFERENCE && se->meta_type == AMT_TYPEREF) {
-				// checking if the structure is extensible
-				int isExtensible = 0;
-				int oneofDependent = 0;
-				if (asntree != NULL) {
-					// iterating over the whole tree
-					isExtensible = structure_is_extensible(asntree, se->reference->components->name, &oneofDependent);
-				} else {
-					// backup option - iterating over what's left
-					isExtensible = structure_is_extensible(expr, se->reference->components->name, &oneofDependent);
-				}
-				if (isExtensible == 1 && oneofDependent == 0) {
-					elem->tags.valueExt = 1;
-				} else if (isExtensible == 1 && oneofDependent == 1) {
-					elem->tags.choiceExt = 1;
-				}
-
-				// make sure that the type is enumerator
-				int enm = 0;
-				int elCount = -1;
-				if (asntree != NULL) {
-					// iterating over the whole tree
-					enm = is_enum(asntree, se->reference->components->name, &elCount);
-				} else {
-					// backup option - iterating over what's left
-					enm = is_enum(expr, se->reference->components->name, &elCount);
-				}
-				if (enm) {
-					if (elCount != -1) {
-						elem->tags.valueUB = elCount;
-					}
-					elem->tags.valueLB = 0;
-				}
-
+				// Some basic parsing first
 				if (se->constraints &&
 					se->constraints->type == ACT_CA_SET) {
 					if (se->constraints->el_count == 1) {
@@ -1842,6 +1848,72 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 						strcpy(elem->type, comp->name);
 					}
 				}
+
+				// checking if the structure is extensible
+				int isExtensible = 0;
+				int oneofDependent = 0;
+				if (asntree != NULL) {
+					// iterating over the whole tree
+					isExtensible = structure_is_extensible(asntree, se->reference->components->name, &oneofDependent);
+				} else {
+					// backup option - iterating over what's left
+					isExtensible = structure_is_extensible(expr, se->reference->components->name, &oneofDependent);
+				}
+				if (isExtensible == 1 && oneofDependent == 0) {
+					elem->tags.valueExt = 1;
+				} else if (isExtensible == 1 && oneofDependent == 1) {
+					elem->tags.choiceExt = 1;
+				}
+
+				// make sure that the type is enumerator
+				int enm = 0;
+				int elCount = -1;
+				if (asntree != NULL) {
+					// iterating over the whole tree
+					enm = is_enum(asntree, se->reference->components->name, &elCount);
+				} else {
+					// backup option - iterating over what's left
+					enm = is_enum(expr, se->reference->components->name, &elCount);
+				}
+				if (enm) {
+					if (elCount != -1) {
+						elem->tags.valueUB = elCount;
+					}
+					elem->tags.valueLB = 0;
+				}
+
+				// checking whether item refers to the other structure
+				if (se->rhs_pspecs != NULL) {
+					asn1p_expr_t *innerSe;
+					char *referencedStructName;
+					if (TQ_FIRST(&se->rhs_pspecs->members)) {
+						TQ_FOR(innerSe, &(se->rhs_pspecs->members), next)
+						{
+							if (innerSe->constraints != NULL) {
+								if (innerSe->constraints->containedSubtype != NULL) {
+									if (innerSe->constraints->containedSubtype->type == ATV_TYPE) {
+											if (innerSe->constraints->containedSubtype->value.v_type->expr_type == A1TC_REFERENCE &&
+												innerSe->constraints->containedSubtype->value.v_type->reference != NULL) {
+													// extracting the name of the referenced type here
+													referencedStructName = innerSe->constraints->containedSubtype->value.v_type->reference->components->name;
+											}
+										}
+								}
+							}
+						}
+					}
+					// take skeleton of referenced type and implement it to this element
+					if (referencedStructName != NULL) {
+						// ToDo - searching for referenced type in ASN.1 tree and creating a nested message
+						char *refType = se->reference->components->name;
+						// find referenced type and process it as element
+						find_and_process_referenced_type(refType, asntree, elem, proto_module);
+						strcpy(elem->type, referencedStructName);
+						// ToDo - probably the referenced message should be more specific and in case it has other
+						//  constraints (like VALUE SET), they should be reflected..
+					}
+				}
+
 			} else if (se->expr_type == ASN_CONSTR_SEQUENCE && se->meta_type == AMT_TYPE) {
 				// treating the case of nested SEQUENCE
 				char *msgName = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator

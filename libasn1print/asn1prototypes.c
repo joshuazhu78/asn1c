@@ -212,6 +212,8 @@ void proto_oneof_add_elem(proto_msg_oneof_t *oneof, proto_msg_def_t *elem) {
 
 void
 proto_messages_add_msg(proto_module_t *proto_module, proto_msg_t *msg) {
+	// ToDo - before adding message to the message stack, we should check if
+	//  message with the same name and same signature already exists
 	size_t existing_count = proto_module->messages;
 	proto_module->message = realloc(proto_module->message, (existing_count + 1) * sizeof(proto_msg_t *));
 	proto_module->message[existing_count] = msg;

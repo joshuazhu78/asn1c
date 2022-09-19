@@ -1,0 +1,77 @@
+
+-- OK: Everything is fine
+
+-- iso.org.dod.internet.private.enterprise (1.3.6.1.4.1)
+-- .spelio.software.asn1c.test (9363.1.5.1)
+-- .18
+
+-- This definition doesn't contain unique flag in CLASS definition, so VALUE SET
+-- should be represented with a CHOICE in natural ordering, not canonical ordering
+
+ModuleTestClass
+	{ iso org(3) dod(6) internet(1) private(4) enterprise(1)
+		spelio(9363) software(1) asn1c(5) test(1) 18 }
+	DEFINITIONS ::=
+BEGIN
+
+    Response ::= SEQUENCE {
+        ies                Response-Container{{Response-IEs}},
+        ...
+    }
+
+    Response-IEs IE-DEFINITION ::= {
+        { ID id-operator1      CRITICALITY low      TYPE Operator1    PRESENCE mandatory } |
+        { ID id-operator2      CRITICALITY low      TYPE Operator2    PRESENCE mandatory } |
+        { ID id-operator3      CRITICALITY low      TYPE Operator3    PRESENCE mandatory } |
+        { ID id-operator4      CRITICALITY low      TYPE Operator4    PRESENCE optional },
+        ...
+    }
+
+    IE-DEFINITION ::= CLASS {
+        &id             CodeID                  UNIQUE,
+        &criticality    Criticality,
+        &Value,
+        &presence       Presence
+    }
+    WITH SYNTAX {
+        ID             &id
+        CRITICALITY     &criticality
+        TYPE            &Value
+        PRESENCE        &presence
+    }
+
+    Response-Container {IE-DEFINITION : IEsSetParam} ::=
+        SEQUENCE (SIZE (0..16)) OF
+        IE-Field {{IEsSetParam}}
+
+    IE-Field {IE-DEFINITION : IEsSetParam} ::= SEQUENCE {
+        id             IE-DEFINITION.&id              ({IEsSetParam}),
+        criticality     IE-DEFINITION.&criticality      ({IEsSetParam}{@id}),
+        value           IE-DEFINITION.&Value            ({IEsSetParam}{@id})
+    }
+
+    CodeID ::= INTEGER (0..128, ...)
+
+    Criticality ::= ENUMERATED {
+        high,
+        low,
+         ...
+    }
+
+    Presence ::= ENUMERATED {
+        optional,
+        mandatory,
+         ...
+    }
+
+    Operator1 ::= OCTET STRING   --(1..10, ...)
+    Operator2 ::= INTEGER (1..32, ...)
+    Operator3 ::= PrintableString (1..150, ...)
+    Operator4 ::= BIT STRING --(1..32, ...)
+
+    id-operator1        CodeID ::= 1
+    id-operator2        CodeID ::= 2
+    id-operator3        CodeID ::= 3
+    id-operator4        CodeID ::= 4
+
+END
