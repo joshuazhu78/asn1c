@@ -201,6 +201,12 @@ asn1print_module(asn1p_t *asn, asn1p_module_t *mod, enum asn1print_flags flags) 
 		strcpy(proto_module->modulename, mod->ModuleName);
 		proto_module->oid = mod->module_oid;
 
+		// ToDo - creating a list of strings, where we will store names of the structs defined in ASN.1, which
+		//  were used as a constraint somewhere else. We don't want to process them again, because they
+		//  would be processed as a nested message
+		// This is going to be addressed in the next PR
+
+
 		TQ_FOR(tx, &(mod->imports), xp_next)
 		{
 			proto_import_t *imp = proto_create_import(tx->fromModuleName, NULL);

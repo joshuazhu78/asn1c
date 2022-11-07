@@ -52,20 +52,22 @@ static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum
 void parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility);
 
 static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-								  proto_module_t *proto_module);
+								  proto_module_t *proto_module, asn1p_t *asn);
 
 static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
 								 asn1p_module_t *mod, proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn);
 
-static int process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart);
+static int process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart, asn1p_t *asn);
 static int get_choice_part(asn1p_expr_t *member, char *choicePart);
 
 static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
-static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, int isValueSet);
+static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_t *asn, int isValueSet,
+											asn1p_expr_t *constainedSkeleton);
 static char *find_referenced_message(char *class_name, asn1p_expr_t *asntree, asn1p_ioc_row_t *referenced_fields);
 
-void find_and_process_referenced_type(const char *refType, asn1p_expr_t *tree, proto_msg_def_t *elem,
-									  proto_module_t *proto_module);
+void find_and_process_referenced_type(const char *refType, asn1p_module_t *modules, proto_msg_def_t *elem,
+									  proto_module_t *proto_module, char *constrainedType, int *matched);
+static int find_and_get_referenced_message(asn1p_module_t *module, asn1p_expr_t *refMsg, char *referencedStructName);
 
 static char *escapeQuotesDup(const char *original);
 
@@ -712,7 +714,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -735,7 +737,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_msg_add_oneof(msg, oneof);
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
@@ -814,7 +816,7 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 	int res = 0;
 
 	if (strcmp(expr->Identifier, refName) == 0) {
-		// Creating and add a message
+		// Creating and adding a message
 		res = add_message_from_expression(refName, msgName, expr, tree, mod, proto_module, flags, asn);
 		return res;
 	} else {
@@ -827,73 +829,133 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 	return res;
 }
 
+// find_and_process_referenced_type() function processes field of the message as a referred type and parses constraints.
+// So far only lists (SEQUENCE OF) can be parsed. This is because they are mainly defined in E2AP.
 void
-find_and_process_referenced_type(const char *refType, asn1p_expr_t *tree, proto_msg_def_t *elem,
-								 proto_module_t *proto_module) {
+find_and_process_referenced_type(const char *refType, asn1p_module_t *module, proto_msg_def_t *elem,
+								 proto_module_t *proto_module, char *constrainedType, int *matched) {
 
-	if (strcmp(tree->Identifier, refType) == 0) {
-		// found the referenced message, cloning it to the element
-		if (tree->expr_type == ASN_CONSTR_SEQUENCE_OF) {
-			elem->tags.repeated = 1;
-			int lb = get_lowerbound(tree->constraints);
-			if (lb != -1) {
-				elem->tags.sizeLB = lb;
+	asn1p_expr_t *tc;
+	TQ_FOR(tc, &(module->members), next)
+	{
+		if (strcmp(tc->Identifier, refType) == 0) {
+			*matched = 1;
+			// found the referenced message, cloning it to the element
+			if (tc->expr_type == ASN_CONSTR_SEQUENCE_OF) {
+				elem->tags.repeated = 1;
+				int lb = get_lowerbound(tc->constraints);
+				if (lb != -1) {
+					elem->tags.sizeLB = lb;
+				}
+				int ub = get_upperbound(tc->constraints);
+				if (ub != -1) {
+					elem->tags.sizeUB = ub;
+				}
+				int extensibility;
+				extensibility = get_extensibility(tc->constraints);
+				if (extensibility) {
+					elem->tags.sizeExt = 1;
+				}
 			}
-			int ub = get_upperbound(tree->constraints);
-			if (ub != -1) {
-				elem->tags.sizeUB = ub;
+			// ToDo - add handling of other types..
+			// composing a referenced message
+			if (tc->lhs_params != NULL) {
+				// if it is not nil, then it can be referenced
+
+				// understanding, if a field of this message requires specific type
+				asn1p_expr_t *innerSe;
+				if (TQ_FIRST(&tc->members)) {
+					TQ_FOR(innerSe, &(tc->members), next)
+					{
+						// handling the case when item of the type is referenced with another type
+						if (innerSe->meta_type == AMT_TYPEREF && innerSe->expr_type == A1TC_REFERENCE) {
+							strcpy(constrainedType, innerSe->reference->components->name);
+							fprintf(stderr, "Hooray! Constrained type was found, it is %s!\n", innerSe->reference->components->name);
+						}
+					}
+				}
+
 			}
-			int extensibility;
-			extensibility = get_extensibility(tree->constraints);
-			if (extensibility) {
-				elem->tags.sizeExt = 1;
-			}
-		}
-		// ToDo - add handling of other types..
-		return;
-	} else {
-		if (tree->next.tq_next != NULL) {
-			asn1p_expr_t *newtree = tree->next.tq_next;
-			find_and_process_referenced_type(refType, newtree, elem, proto_module);
 			return;
 		}
+	}
+
+	if (module->mod_next.tq_next != NULL || matched == 0) {
+		asn1p_module_t *nextmodule = module->mod_next.tq_next;
+		find_and_process_referenced_type(refType, nextmodule, elem, proto_module, constrainedType, matched);
+		return;
 	}
 
 	return;
 }
 
 static int
-process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart) {
+find_and_get_referenced_message(asn1p_module_t *module, asn1p_expr_t *refMsg, char *referencedStructName) {
+
+	fprintf(stderr, "find_and_get_referenced_message(): Entering the function to find %s in module %s\n",
+			referencedStructName, module->ModuleName);
+
 	int res = 0;
 
-	if (strcmp(tree->Identifier, className) == 0) {
-		// searching for unique and choice part
-		if (tree->ioc_table != NULL) {
-			int rowIdx = 0;
-			for (rowIdx = 0; rowIdx < (int) tree->ioc_table->rows; rowIdx++) {
-				asn1p_ioc_row_t *table_row = tree->ioc_table->row[rowIdx];
+	asn1p_expr_t *tc;
+	TQ_FOR(tc, &(module->members), next)
+	{
+		if (strcmp(tc->Identifier, referencedStructName) == 0) {
+			// then copy it over to the target one
+			memcpy(refMsg, tc, sizeof(*tc));
+			fprintf(stderr, "find_and_get_referenced_message(): Hooray! Constrained skeleton was found! It is %s\n",
+					refMsg->Identifier);
+			res = 1;
+			return res;
+		}
+	}
 
-				// making sure that the unique tag is present
-				int colIdx = 0;
-				for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
-					struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
-					if (colij.field->unique) {
-						*unique = 1;
-						break;
+	if (module->mod_next.tq_next != NULL && res == 0) {
+		res = find_and_get_referenced_message(module->mod_next.tq_next, refMsg, referencedStructName);
+		if (res == 0) {
+			fprintf(stderr, "find_and_get_referenced_message(): Constrained skeleton was NOT found..\n");
+		}
+		return res;
+	}
+
+	return res;
+}
+
+static int
+process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart, asn1p_t *asn) {
+	int res = 0;
+
+	asn1p_module_t *mod;
+	TQ_FOR(mod, &(asn->modules), mod_next)
+	{
+		asn1p_expr_t *tc;
+		TQ_FOR(tc, &(mod->members), next)
+		{
+			if (strcmp(tc->Identifier, className) == 0) {
+				fprintf(stderr, "process_referenced_class(): CLASS %s was found!\n", tc->Identifier);
+				// searching for unique and choice part
+				if (tc->ioc_table != NULL) {
+					int rowIdx = 0;
+					for (rowIdx = 0; rowIdx < (int) tc->ioc_table->rows; rowIdx++) {
+						asn1p_ioc_row_t *table_row = tc->ioc_table->row[rowIdx];
+
+						// making sure that the unique tag is present
+						int colIdx = 0;
+						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+							if (colij.field->unique) {
+								*unique = 1;
+								break;
+							}
+						}
 					}
+					if (tc->members.tq_head != NULL) {
+						get_choice_part(tc->members.tq_head, choicePart);
+					}
+					res = 1;
+					return res;
 				}
 			}
-			if (tree->members.tq_head) {
-				get_choice_part(tree->members.tq_head, choicePart);
-			}
-			return 1;
-		}
-		// couldn't find class with non-empty fields.. returning 0 to indicate it
-		return 0;
-	} else {
-		if (tree->next.tq_next != NULL) {
-			res = process_referenced_class(className, tree->next.tq_next, unique, choicePart);
-			return res;
 		}
 	}
 
@@ -906,11 +968,22 @@ get_choice_part(asn1p_expr_t *member, char *choicePart) {
 	int res = 0;
 
 	// iterate over tree members and get the structure name, which has tree->members.tq_head == NULL
-	if (member->members.tq_head == NULL) {
-		// this is the choice part
-		strcat(choicePart, member->Identifier);
-		return 1;
-	} else {
+	 if (member->members.tq_head != NULL) {
+		if (member->members.tq_head->expr_type == ASN_TYPE_ANY) {
+			// this is the choice part
+			strcat(choicePart, member->Identifier);
+			return 1;
+		} else {
+			if (member->next.tq_next != NULL) {
+				res = get_choice_part(member->next.tq_next, choicePart);
+				return res;
+			}
+		}
+	} else if (member->members.tq_head == NULL) {
+		 // this is the choice part
+		 strcat(choicePart, member->Identifier);
+		 return 1;
+	 } else {
 		if (member->next.tq_next != NULL) {
 			res = get_choice_part(member->next.tq_next, choicePart);
 			return res;
@@ -928,6 +1001,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		// A dummy placeholder to avoid coverage errors
 	}
 
+	fprintf(stderr, "asn1print_expr_proto(): Processing structure %s\n", expr->Identifier);
 	// If there are specializations (driven by parameters, define these as proto messages)
 	if (expr->specializations.pspecs_count > 0) {
 		int i;
@@ -1040,17 +1114,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 					case ATV_UNPARSED:
 						// ToDo: Regular messages, which are defined through CLASS are processed here..
 						if (expr->ioc_table != NULL) {
-							struct asn1p_expr_s *asntree = NULL;
-							if (asn->modules.tq_head != NULL) {
-								if (asn->modules.tq_head->members.tq_head != NULL) {
-									asntree = asn->modules.tq_head->members.tq_head;
-								}
-							}
-							if (asntree != NULL) {
-								process_class_referenced_message(expr, proto_module, asntree, 0);
-							} else {
-								process_class_referenced_message(expr, proto_module, expr, 0);
-							}
+							process_class_referenced_message(expr, proto_module, asn, 0, NULL);
 						}
 						break;
 					default:
@@ -1290,7 +1354,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -1320,7 +1384,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
 
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -1401,17 +1465,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		if (expr->reference && expr->reference->comp_count > 0) {
 			strcpy(refname, expr->reference->components[0].name);
 		}
-		struct asn1p_expr_s *asntree = NULL;
-		if (asn->modules.tq_head != NULL) {
-			if (asn->modules.tq_head->members.tq_head != NULL) {
-				asntree = asn->modules.tq_head->members.tq_head;
-			}
-		}
-		if (asntree != NULL) {
-			process_class_referenced_message(expr, proto_module, asntree, 1);
-		} else {
-			process_class_referenced_message(expr, proto_module, expr, 1);
-		}
+		process_class_referenced_message(expr, proto_module, asn, 1, NULL);
 		return 0;
 	} else {
 		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
@@ -1490,7 +1544,7 @@ is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
 
 static int
 proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
-					   proto_module_t *proto_module) {
+					   proto_module_t *proto_module, asn1p_t *asn) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
@@ -1904,13 +1958,83 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 					}
 					// take skeleton of referenced type and implement it to this element
 					if (referencedStructName != NULL) {
-						// ToDo - searching for referenced type in ASN.1 tree and creating a nested message
-						char *refType = se->reference->components->name;
-						// find referenced type and process it as element
-						find_and_process_referenced_type(refType, asntree, elem, proto_module);
 						strcpy(elem->type, referencedStructName);
-						// ToDo - probably the referenced message should be more specific and in case it has other
-						//  constraints (like VALUE SET), they should be reflected..
+						// expr_type != ASN_CONSTR_SEQUENCE_OF is to avoid some specific case in *AP definitions by O-RAN and 3GPP
+						if (expr->expr_type != ASN_CONSTR_SEQUENCE_OF) {
+							fprintf(stderr, "proto_process_children() - line 1964: processing message %s, children %s and "
+											"trying to find its reference %s\n", expr->Identifier, se->Identifier,
+									referencedStructName);
+							// Searching for referenced type in ASN.1 tree and adjusting element of the message
+							//  (parsing constraints). Also, extracting constraints (referenced type, which defines
+							//  shape of a nested message)
+							char *refType = se->reference->components->name;
+							// find referenced type and process it as element
+							char constrainedType[PROTO_NAME_CHARS] = {};
+							int matched = 0;
+							find_and_process_referenced_type(refType, se->reference->module, elem, proto_module,
+															 constrainedType, &matched);
+							if (matched > 0 && strlen(constrainedType) > 0) {
+								fprintf(stderr,
+										"proto_process_children() - line 1975: extracted constrained type %s for %s\n",
+										constrainedType, refType);
+							} else {
+								fprintf(stderr,
+										"proto_process_children() - line 1980: constrained type was NOT found for %s, strlen is %ld\n",
+										refType, strlen(constrainedType));
+							}
+							// Extracting constrained message and creating it
+							asn1p_expr_t *refMsg = malloc(sizeof(*se));
+							// We assume by default that the refMsg would be found, because we have referencedStructName
+							int found = 0;
+							found = find_and_get_referenced_message(se->reference->module, refMsg, referencedStructName);
+							if (found == 0) {
+								fprintf(stderr,
+										"proto_process_children() - line 1986: referenced message %s was not found in the tree\n",
+										referencedStructName);
+							} else {
+								// ToDo - add just created message to the list of messages, which were created in
+								//  order to exclude it from the future processing (helps to save processing time and avoid
+								//  message duplicates)
+								fprintf(stderr,
+										"proto_process_children() - line 2007: Processing children %s for structure %s with referenced message %s\n",
+										se->Identifier, expr->Identifier, refMsg->Identifier);
+								// ToDo - check if referenced message was already created.. If not, then create it..
+								int ret = 0;
+								if (constrainedType != NULL && strlen(constrainedType) > 0) {
+									asn1p_expr_t *constrainedSkeleton = malloc(sizeof(*se));
+									int result = find_and_get_referenced_message(se->reference->module, constrainedSkeleton,
+																				 constrainedType);
+									fprintf(stderr, "proto_process_children() - line 2014: Constrained skeleton is %s\n",
+											constrainedSkeleton->Identifier);
+									if (refMsg->meta_type == AMT_VALUESET) {
+										if (result != 0) {
+											ret = process_class_referenced_message(refMsg, proto_module, asn, 1,
+																				   constrainedSkeleton);
+										} else {
+											ret = process_class_referenced_message(refMsg, proto_module, asn, 1,
+																				   NULL);
+										}
+									} else {
+										ret = process_class_referenced_message(refMsg, proto_module, asn, 0,
+																			   constrainedSkeleton);
+									}
+									// ToDo - exclude this message from further processing..
+								} else {
+									if (refMsg->meta_type == AMT_VALUESET) {
+										ret = process_class_referenced_message(refMsg, proto_module, asn, 1,
+																			   NULL);
+									} else {
+										ret = process_class_referenced_message(refMsg, proto_module, asn, 0,
+																			   NULL);
+									}
+									// ToDo - exclude this message from further processing..
+								}
+								if (ret != 0) {
+									printf("Error in proto_process_children() - couldn't process class referenced message (constrained by other class))\n");
+									return ret;
+								}
+							}
+						}
 					}
 				}
 
@@ -1936,7 +2060,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				}
 
 				int extensibility = 0;
-				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module);
+				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 					elem->tags.valueExt = 1;
@@ -1967,7 +2091,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				proto_msg_add_oneof(msg, oneof);
 
 				int extensibility = 0;
-				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module);
+				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
 
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -2350,10 +2474,18 @@ asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_
 }
 
 // This function creates a message for a standalone message defined through the CLASS
+// role of constrainedSkeleton is following - it limits fields of the CLASS to be included to the messages,
+// i.e., some of the CLASS fields would not be included in the final message
 static int
-process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_expr_t *asntree, int isValueSet) {
+process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_t *asntree, int isValueSet, asn1p_expr_t *constrainedSkeleton) {
 	char comment[PROTO_COMMENTS_CHARS] = {};
 	char msgname[PROTO_NAME_CHARS] = {};
+
+	fprintf(stderr, "process_class_referenced_message(): Processing structure %s\n", expr->Identifier);
+
+	if (constrainedSkeleton != NULL) {
+		fprintf(stderr, "process_class_referenced_message(): Constrained skeleton is NOT NULL! Value Set is %d\n", isValueSet);
+	}
 
 	strcpy(comment, "concrete instance(s) of class ");
 	if (expr->reference != NULL && expr->reference->comp_count > 0) {
@@ -2382,7 +2514,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 
 			char *refName = NULL;
-			refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
+			refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
 
 			if (refName != NULL && strcmp(refName, "") != 0) {
 				// Found referenced message -> increasing counter
@@ -2397,7 +2529,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 				asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 
 				char *refName = NULL;
-				refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
+				refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
 				proto_msg_def_t *elem = proto_create_msg_elem(refName, refName, NULL);
 				proto_msg_add_elem((proto_msg_t *) oneof, elem);
 			}
@@ -2412,7 +2544,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			// and name of the part which is treated as choice
 			char *choicePart = malloc(PROTO_COMMENTS_CHARS);
 			memset(choicePart, 0, PROTO_COMMENTS_CHARS);
-			int res = process_referenced_class(expr->reference->components->name, asntree, &unique, choicePart);
+			int res = process_referenced_class(expr->reference->components->name, expr->module->members.tq_head, &unique, choicePart, asntree);
 
 			if (res != 0) {
 				// now we should.. compose the message structure:
@@ -2430,13 +2562,14 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
 							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
 							if (strcmp(colij.field->Identifier, choicePart) == 0) {
+								// ToDo - find a way to parse type of the element..
 								// colij.value->Identifier must be present, otherwise anonymous value set can't be defined
 								proto_msg_def_t *elem = proto_create_msg_elem(colij.value->Identifier,
 																			  colij.value->Identifier, NULL);
 
 								// parsing extensibility here
 								int oneOfDependent = 0;
-								int isExtensible = structure_is_extensible(asntree,
+								int isExtensible = structure_is_extensible(expr->module->members.tq_head,
 																		   colij.value->Identifier,
 																		   &oneOfDependent);
 								if (isExtensible == 1 && oneOfDependent == 0) {
@@ -2447,7 +2580,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								// make sure that the type is enumerator
 								int enm = 0;
 								int elCount = -1;
-								enm = is_enum(asntree, colij.value->Identifier, &elCount);
+								enm = is_enum(expr->module->members.tq_head, colij.value->Identifier, &elCount);
 
 								if (enm) {
 									if (elCount != -1) {
@@ -2455,6 +2588,10 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 									}
 									elem->tags.valueLB = 0;
 								}
+
+								// We do NOT check whether this field is in the constrained skeleton, because
+								// this is not the case. Variable CHOICE part must be present,
+								// it doesn't make sense to not include it in the message otherwise.
 								proto_msg_add_elem((proto_msg_t *) oneof, elem);
 							}
 						}
@@ -2477,13 +2614,15 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								if (unique) {
 									elem->tags.canonicalOrder = 1;
 								}
+								// we don't check if this element is in constrainedSkeleton on purpose,
+								// because it doesn't make sense to not include variable choice part in the message
 								proto_msg_add_elem(msg, elem);
 							} else {
 								proto_msg_def_t *elem = proto_create_msg_elem(colij.field->Identifier,
 																			  colij.value->reference->components->name, NULL);
 								// parsing extensibility here
 								int oneOfDependent = 0;
-								int isExtensible = structure_is_extensible(asntree,
+								int isExtensible = structure_is_extensible(expr->module->members.tq_head,
 																		   colij.value->reference->components->name,
 																		   &oneOfDependent);
 								if (isExtensible == 1 && oneOfDependent == 0) {
@@ -2494,7 +2633,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								// make sure that the type is enumerator
 								int enm = 0;
 								int elCount = -1;
-								enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+								enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
 
 								if (enm) {
 									if (elCount != -1) {
@@ -2508,7 +2647,37 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 									elem->tags.unique = 1;
 								}
 
-								proto_msg_add_elem(msg, elem);
+								// check whether this field is in the constrained skeleton
+								if (constrainedSkeleton != NULL) {
+									asn1p_expr_t *inSe;
+									if (TQ_FIRST(&constrainedSkeleton->members)) {
+										TQ_FOR(inSe, &(constrainedSkeleton->members), next)
+										{
+											// each field should be referenced
+											if (inSe->reference != NULL && inSe->expr_type == A1TC_REFERENCE) {
+												int match = 0;
+												for (int k = 0; k < (int) inSe->reference->comp_count; k++) {
+													fprintf(stderr, "Reference %d is following: %s\n", k,
+															inSe->reference->components[k].name);
+													// we should match, whether one of the fields is referenced here.
+													// if yes, then add it to the message
+													if (strcmp(colij.field->Identifier, inSe->reference->components[k].name) == 0) {
+														match++;
+													}
+												}
+												// If field was matched, then add it as a message element
+												if (match > 0) {
+													proto_msg_add_elem(msg, elem);
+													fprintf(stderr, "(CONSTRAINED) Element %s being added to the message %s\n", elem->name, msg->name);
+												}
+											} else {
+												fprintf(stderr, "Field %s of structure %s is not referenced here\n", inSe->Identifier, constrainedSkeleton->Identifier);
+											}
+										}
+									}
+								} else {
+									proto_msg_add_elem(msg, elem);
+								}
 							}
 						}
 						// one iteration is enough - VALUE SET is defined through the same CLASS, and
@@ -2521,7 +2690,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 						colIdx = 0;
 						char *refName = NULL;
-						refName = find_referenced_message(expr->reference->components->name, asntree, table_row);
+						refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
 
 						if (refName != NULL && strcmp(refName, "") != 0) {
 							// Found referenced message -> adding it as an element.
@@ -2545,7 +2714,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 										strcpy(elem->type, colij.value->reference->components->name);
 										// parsing extensibility here
 										int oneOfDependent = 0;
-										int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
+										int isExtensible = structure_is_extensible(expr->module->members.tq_head, colij.value->reference->components->name,
 																				   &oneOfDependent);
 										if (isExtensible == 1 && oneOfDependent == 0) {
 											elem->tags.valueExt = 1;
@@ -2555,7 +2724,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 										// make sure that the type is enumerator
 										int enm = 0;
 										int elCount = -1;
-										enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+										enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
 
 										if (enm) {
 											if (elCount != -1) {
@@ -2660,6 +2829,8 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 					proto_msg_add_oneof(msgOneOf, oneof);
 					proto_messages_add_msg(proto_module, msgOneOf);
 				}
+			} else {
+				fprintf(stderr, "Processing referenced CLASS %s was not successful, message %s wouldn't be created..\n", expr->reference->components->name, expr->Identifier);
 			}
 		}
 		proto_messages_add_msg(proto_module, msg);
@@ -2678,7 +2849,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						strcpy(elem->type, colij.value->reference->components->name);
 						// parsing extensibility here
 						int oneOfDependent = 0;
-						int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
+						int isExtensible = structure_is_extensible(expr->module->members.tq_head, colij.value->reference->components->name,
 																   &oneOfDependent);
 						if (isExtensible == 1 && oneOfDependent == 0) {
 							elem->tags.valueExt = 1;
@@ -2688,7 +2859,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						// make sure that the type is enumerator
 						int enm = 0;
 						int elCount = -1;
-						enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
+						enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
 
 						if (enm) {
 							if (elCount != -1) {

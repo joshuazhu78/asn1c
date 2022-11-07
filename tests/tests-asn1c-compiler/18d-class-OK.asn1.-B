@@ -22,76 +22,39 @@ enum Presence {
     PRESENCE_MANDATORY = 1;
 };
 
+// value set from 18d-class-OK.asn1:22
+// {Response-IEs&Value}
+message ResponseIEsValue {
+    // value set translated as choice from 18d-class-OK.asn1:22
+    oneof response_ies {
+        // @inject_tag: aper:"choiceIdx:1,"
+        Operator1 operator1 = 1 [ json_name="Operator1"];
+        // @inject_tag: aper:"choiceIdx:2,"
+        Operator2 operator2 = 2 [ json_name="Operator2"];
+        // @inject_tag: aper:"choiceIdx:3,"
+        Operator3 operator3 = 3 [ json_name="Operator3"];
+        // @inject_tag: aper:"choiceIdx:4,"
+        Operator4 operator4 = 4 [ json_name="Operator4"];
+    }
+};
+
+// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// {Response-IEs}
+message ResponseIEs {
+    // @inject_tag: aper:"unique,"
+    CodeId id = 1 [ json_name="&id"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality criticality = 2 [ json_name="&criticality"];
+    // @inject_tag: aper:"canonicalOrder,"
+    ResponseIEsValue value = 3 [ json_name="&Value"];
+};
+
 // sequence from 18d-class-OK.asn1:18
 // @inject_tag: aper:"valueExt"
 // {Response}
 message Response {
     // @inject_tag: aper:"sizeLB:0,sizeUB:16,"
     repeated ResponseIEs ies = 1 [ json_name="ies"];
-};
-
-// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
-// {Response-IEs000}
-message ResponseIEs000 {
-    // @inject_tag: aper:"unique,"
-    CodeId id = 1 [ json_name="&id"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Criticality criticality = 2 [ json_name="&criticality"];
-    Operator1 value = 3 [ json_name="&Value"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Presence presence = 4 [ json_name="&presence"];
-};
-
-// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
-// {Response-IEs001}
-message ResponseIEs001 {
-    // @inject_tag: aper:"unique,"
-    CodeId id = 1 [ json_name="&id"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Criticality criticality = 2 [ json_name="&criticality"];
-    Operator2 value = 3 [ json_name="&Value"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Presence presence = 4 [ json_name="&presence"];
-};
-
-// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
-// {Response-IEs002}
-message ResponseIEs002 {
-    // @inject_tag: aper:"unique,"
-    CodeId id = 1 [ json_name="&id"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Criticality criticality = 2 [ json_name="&criticality"];
-    Operator3 value = 3 [ json_name="&Value"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Presence presence = 4 [ json_name="&presence"];
-};
-
-// concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
-// {Response-IEs003}
-message ResponseIEs003 {
-    // @inject_tag: aper:"unique,"
-    CodeId id = 1 [ json_name="&id"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Criticality criticality = 2 [ json_name="&criticality"];
-    Operator4 value = 3 [ json_name="&Value"];
-    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
-    Presence presence = 4 [ json_name="&presence"];
-};
-
-// value set from 18d-class-OK.asn1:22
-// {Response-IEs}
-message ResponseIEs {
-    // value set translated as choice from 18d-class-OK.asn1:22
-    oneof response_ies {
-        // @inject_tag: aper:"choiceIdx:1,"
-        ResponseIEs000 response_ies000 = 1 [ json_name="Response-IEs000"];
-        // @inject_tag: aper:"choiceIdx:2,"
-        ResponseIEs001 response_ies001 = 2 [ json_name="Response-IEs001"];
-        // @inject_tag: aper:"choiceIdx:3,"
-        ResponseIEs002 response_ies002 = 3 [ json_name="Response-IEs002"];
-        // @inject_tag: aper:"choiceIdx:4,"
-        ResponseIEs003 response_ies003 = 4 [ json_name="Response-IEs003"];
-    }
 };
 
 // sequence from 18d-class-OK.asn1:45
