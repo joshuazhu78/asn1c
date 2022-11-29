@@ -29,13 +29,13 @@ message ResponseIEsValue {
     // value set translated as choice from 18d-class-OK.asn1:22
     oneof response_ies {
         // @inject_tag: aper:"choiceIdx:1,"
-        Operator1 operator1 = 1 [ json_name="Operator1"];
+        Operator1 id_operator1 = 1 [ json_name="id-operator1"];
         // @inject_tag: aper:"choiceIdx:2,"
-        Operator2 operator2 = 2 [ json_name="Operator2"];
+        Operator2 id_operator2 = 2 [ json_name="id-operator2"];
         // @inject_tag: aper:"choiceIdx:3,"
-        Operator3 operator3 = 3 [ json_name="Operator3"];
+        Operator3 id_operator3 = 3 [ json_name="id-operator3"];
         // @inject_tag: aper:"choiceIdx:4,"
-        Operator4 operator4 = 4 [ json_name="Operator4"];
+        Operator4 id_operator4 = 4 [ json_name="id-operator4"];
     }
 };
 

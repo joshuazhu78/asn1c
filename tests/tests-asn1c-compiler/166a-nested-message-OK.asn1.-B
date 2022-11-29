@@ -31,7 +31,7 @@ enum Presence {
 // value set from 166a-nested-message-OK.asn1:23
 // {SomeList-ExtIEs}
 message SomeListExtIes {
-    message Empty{};
+    google.protobuf.Empty value = 1 [ json_name="value"];
 };
 
 // sequence from 166a-nested-message-OK.asn1:16

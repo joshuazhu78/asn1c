@@ -51,23 +51,22 @@ static int proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum
 
 void parse_constraints_enumerated(asn1p_expr_t *expr, int *elCount, int *extensibility);
 
-static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
+static int proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, int *extensibility,
 								  proto_module_t *proto_module, asn1p_t *asn);
 
-static int proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
-								 asn1p_module_t *mod, proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn);
+static int proto_extract_referenced_message(const char *refName, const char *msgName, proto_module_t *proto_module,
+                                            enum asn1print_flags2 flags, asn1p_t *asn);
 
-static int process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart, asn1p_t *asn);
+static int process_referenced_class(const char *className, int *unique, char *choicePart, asn1p_t *asn);
 static int get_choice_part(asn1p_expr_t *member, char *choicePart);
 
-static int asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file);
 static int process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_module, asn1p_t *asn, int isValueSet,
 											asn1p_expr_t *constainedSkeleton);
-static char *find_referenced_message(char *class_name, asn1p_expr_t *asntree, asn1p_ioc_row_t *referenced_fields);
+static char *find_referenced_message(char *class_name, asn1p_ioc_row_t *referenced_fields, asn1p_t *asn);
 
-void find_and_process_referenced_type(const char *refType, asn1p_module_t *modules, proto_msg_def_t *elem,
+void find_and_process_referenced_type(const char *refType, asn1p_t *asn, proto_msg_def_t *elem,
 									  proto_module_t *proto_module, char *constrainedType, int *matched);
-static int find_and_get_referenced_message(asn1p_module_t *module, asn1p_expr_t *refMsg, char *referencedStructName);
+static int find_and_get_referenced_message(asn1p_t *asn, asn1p_expr_t *refMsg, char *referencedStructName);
 
 static char *escapeQuotesDup(const char *original);
 
@@ -203,35 +202,32 @@ proto_extract_params(proto_msg_t *msg, asn1p_expr_t *expr) {
 // or 1, if it doesn't. It also puts 1 in oneofDependent variable, if the structure is of type CHOICE.
 // Iteration over the ASN.1 tree is recursive.
 static int
-structure_is_extensible(asn1p_expr_t *expr, const char *name, int *oneofDependent) {
-	asn1p_expr_t *se;
+structure_is_extensible(asn1p_t *asn, const char *name, int *oneofDependent) {
 	int extensibility = 0;
 
-	if (strcmp(expr->Identifier, name) == 0) {
-		if (expr->expr_type == ASN_CONSTR_CHOICE) {
-			*oneofDependent = 1;
-		}
-		if (TQ_FIRST(&expr->members)) {
-			TQ_FOR(se, &(expr->members), next)
-			{
-				if (se->expr_type == A1TC_EXTENSIBLE) {
-					extensibility = 1;
-					break;
-				}
-			}
-		}
-	} else {
-		if (expr->next.tq_next != NULL) {
-			struct asn1p_expr_s *next = expr->next.tq_next;
-			int isExtensible = 0;
-			int oneof = 0;
-			isExtensible = structure_is_extensible(next, name, &oneof);
-			if (isExtensible) {
-				*oneofDependent = oneof;
-				return isExtensible;
-			}
-		}
-	}
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (strcmp(tc->Identifier, name) == 0) {
+                if (tc->expr_type == ASN_CONSTR_CHOICE) {
+                    *oneofDependent = 1;
+                }
+                asn1p_expr_t *se;
+                if (TQ_FIRST(&tc->members)) {
+                    TQ_FOR(se, &(tc->members), next)
+                    {
+                        if (se->expr_type == A1TC_EXTENSIBLE) {
+                            extensibility = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 	return extensibility;
 }
@@ -386,7 +382,7 @@ get_upperbound(const asn1p_constraint_t *ct) {
 }
 
 static int
-add_message_from_expression(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *asntree, asn1p_module_t *mod,
+add_message_from_expression(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_module_t *mod,
 							proto_module_t *proto_module, enum asn1print_flags2 flags, asn1p_t *asn) {
 	if (!expr->Identifier) return 1;
 
@@ -486,7 +482,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 						return 0;
 					case ATV_UNPARSED:
 						if (expr->ioc_table != NULL) {
-							asn1extract_columns(expr, proto_module, mod->source_file_name);
+                            process_class_referenced_message(expr, proto_module, asn, 1, NULL);
 						}
 						break;
 					default:
@@ -714,7 +710,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		}
 
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -737,7 +733,7 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_msg_add_oneof(msg, oneof);
 
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
 		}
@@ -759,31 +755,19 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 			asn1p_expr_t *refElem;
 			refElem = WITH_MODULE_NAMESPACE(expr->module, expr_ns, asn1f_find_terminal_type_ex(asn, expr_ns, expr));
 			sprintf(msgelem->type, "%s%03d", refElem->Identifier, refElem->_type_unique_index);
-			if (asntree != NULL) {
-				// extract message first
-				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
-				// now add this message to the message tree
-				if (res) {
-					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
-							refElem->Identifier, refElem->meta_type, refElem->expr_type);
-				}
-			} else {
-				// extract message first and then
-				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
-				// now add this message to the message tree
-				if (res) {
-					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
-							refElem->Identifier, refElem->meta_type, refElem->expr_type);
-				}
-			}
+            int res = 0;
+            res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, proto_module, flags, asn);
+            // now add this message to the message tree
+            if (res) {
+                fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
+                        refElem->Identifier, refElem->meta_type, refElem->expr_type);
+            }
 		}
 
 		// checking if the structure is extensible
 		int isExtensible = 0;
 		int oneofDependent = 0;
-		isExtensible = structure_is_extensible(asntree, expr->reference->components->name, &oneofDependent);
+		isExtensible = structure_is_extensible(asn, expr->reference->components->name, &oneofDependent);
 		if (isExtensible == 1 && oneofDependent == 0) {
 			msgelem->tags.valueExt = 1;
 		} else if (isExtensible == 1 && oneofDependent == 1) {
@@ -795,36 +779,38 @@ add_message_from_expression(const char *refName, const char *msgName, asn1p_expr
 		proto_messages_add_msg(proto_module, msg);
 		return 0;
 
-	} else if (expr->meta_type == AMT_VALUESET && expr->expr_type == A1TC_REFERENCE) {
-		char refname[PROTO_NAME_CHARS] = {};
-		if (expr->reference && expr->reference->comp_count > 0) {
-			strcpy(refname, expr->reference->components[0].name);
-		}
-		asn1extract_columns(expr, proto_module, mod->source_file_name);
-		return 0;
-	} else {
-		fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
-				expr->Identifier, expr->meta_type, expr->expr_type);
-	}
+    } else if (expr->meta_type == AMT_VALUESET && expr->expr_type == A1TC_REFERENCE) {
+        char refname[PROTO_NAME_CHARS] = {};
+        if (expr->reference && expr->reference->comp_count > 0) {
+            strcpy(refname, expr->reference->components[0].name);
+        }
+        process_class_referenced_message(expr, proto_module, asn, 1, NULL);
+        return 0;
+    } else {
+        fprintf(stderr, "\n\n//////// ERROR Unhandled expr %s. Meta type: %d. Expr type: %d /////\n\n",
+                expr->Identifier, expr->meta_type, expr->expr_type);
+    }
 	return 0;
 }
 
 static int
-proto_extract_referenced_message(const char *refName, const char *msgName, asn1p_expr_t *expr, asn1p_expr_t *tree,
-								 asn1p_module_t *mod, proto_module_t *proto_module,
-								 enum asn1print_flags2 flags, asn1p_t *asn) {
+proto_extract_referenced_message(const char *refName, const char *msgName, proto_module_t *proto_module,
+                                 enum asn1print_flags2 flags, asn1p_t *asn) {
 	int res = 0;
 
-	if (strcmp(expr->Identifier, refName) == 0) {
-		// Creating and adding a message
-		res = add_message_from_expression(refName, msgName, expr, tree, mod, proto_module, flags, asn);
-		return res;
-	} else {
-		if (expr->next.tq_next != NULL) {
-			res = proto_extract_referenced_message(refName, msgName, expr->next.tq_next, tree, mod, proto_module, flags, asn);
-			return res;
-		}
-	}
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (strcmp(tc->Identifier, refName) == 0) {
+                // Creating and adding a message
+                res = add_message_from_expression(refName, msgName, tc, mod, proto_module, flags, asn);
+                return res;
+            }
+        }
+    }
 
 	return res;
 }
@@ -832,97 +818,88 @@ proto_extract_referenced_message(const char *refName, const char *msgName, asn1p
 // find_and_process_referenced_type() function processes field of the message as a referred type and parses constraints.
 // So far only lists (SEQUENCE OF) can be parsed. This is because they are mainly defined in E2AP.
 void
-find_and_process_referenced_type(const char *refType, asn1p_module_t *module, proto_msg_def_t *elem,
+find_and_process_referenced_type(const char *refType, asn1p_t *asn, proto_msg_def_t *elem,
 								 proto_module_t *proto_module, char *constrainedType, int *matched) {
 
-	asn1p_expr_t *tc;
-	TQ_FOR(tc, &(module->members), next)
-	{
-		if (strcmp(tc->Identifier, refType) == 0) {
-			*matched = 1;
-			// found the referenced message, cloning it to the element
-			if (tc->expr_type == ASN_CONSTR_SEQUENCE_OF) {
-				elem->tags.repeated = 1;
-				int lb = get_lowerbound(tc->constraints);
-				if (lb != -1) {
-					elem->tags.sizeLB = lb;
-				}
-				int ub = get_upperbound(tc->constraints);
-				if (ub != -1) {
-					elem->tags.sizeUB = ub;
-				}
-				int extensibility;
-				extensibility = get_extensibility(tc->constraints);
-				if (extensibility) {
-					elem->tags.sizeExt = 1;
-				}
-			}
-			// ToDo - add handling of other types..
-			// composing a referenced message
-			if (tc->lhs_params != NULL) {
-				// if it is not nil, then it can be referenced
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (strcmp(tc->Identifier, refType) == 0) {
+                *matched = 1;
+                // found the referenced message, cloning it to the element
+                if (tc->expr_type == ASN_CONSTR_SEQUENCE_OF) {
+                    elem->tags.repeated = 1;
+                    int lb = get_lowerbound(tc->constraints);
+                    if (lb != -1) {
+                        elem->tags.sizeLB = lb;
+                    }
+                    int ub = get_upperbound(tc->constraints);
+                    if (ub != -1) {
+                        elem->tags.sizeUB = ub;
+                    }
+                    int extensibility;
+                    extensibility = get_extensibility(tc->constraints);
+                    if (extensibility) {
+                        elem->tags.sizeExt = 1;
+                    }
+                }
+                // ToDo - add handling of other types..
+                // composing a referenced message
+                if (tc->lhs_params != NULL) {
+                    // if it is not nil, then it can be referenced
 
-				// understanding, if a field of this message requires specific type
-				asn1p_expr_t *innerSe;
-				if (TQ_FIRST(&tc->members)) {
-					TQ_FOR(innerSe, &(tc->members), next)
-					{
-						// handling the case when item of the type is referenced with another type
-						if (innerSe->meta_type == AMT_TYPEREF && innerSe->expr_type == A1TC_REFERENCE) {
-							strcpy(constrainedType, innerSe->reference->components->name);
-							fprintf(stderr, "Hooray! Constrained type was found, it is %s!\n", innerSe->reference->components->name);
-						}
-					}
-				}
+                    // understanding, if a field of this message requires specific type
+                    asn1p_expr_t *innerSe;
+                    if (TQ_FIRST(&tc->members)) {
+                        TQ_FOR(innerSe, &(tc->members), next)
+                        {
+                            // handling the case when item of the type is referenced with another type
+                            if (innerSe->meta_type == AMT_TYPEREF && innerSe->expr_type == A1TC_REFERENCE) {
+                                strcpy(constrainedType, innerSe->reference->components->name);
+                                fprintf(stderr, "Hooray! Constrained type was found, it is %s!\n", innerSe->reference->components->name);
+                            }
+                        }
+                    }
 
-			}
-			return;
-		}
-	}
-
-	if (module->mod_next.tq_next != NULL || matched == 0) {
-		asn1p_module_t *nextmodule = module->mod_next.tq_next;
-		find_and_process_referenced_type(refType, nextmodule, elem, proto_module, constrainedType, matched);
-		return;
-	}
+                }
+                return;
+            }
+        }
+    }
 
 	return;
 }
 
 static int
-find_and_get_referenced_message(asn1p_module_t *module, asn1p_expr_t *refMsg, char *referencedStructName) {
-
-	fprintf(stderr, "find_and_get_referenced_message(): Entering the function to find %s in module %s\n",
-			referencedStructName, module->ModuleName);
+find_and_get_referenced_message(asn1p_t *asn, asn1p_expr_t *refMsg, char *referencedStructName) {
 
 	int res = 0;
 
-	asn1p_expr_t *tc;
-	TQ_FOR(tc, &(module->members), next)
-	{
-		if (strcmp(tc->Identifier, referencedStructName) == 0) {
-			// then copy it over to the target one
-			memcpy(refMsg, tc, sizeof(*tc));
-			fprintf(stderr, "find_and_get_referenced_message(): Hooray! Constrained skeleton was found! It is %s\n",
-					refMsg->Identifier);
-			res = 1;
-			return res;
-		}
-	}
-
-	if (module->mod_next.tq_next != NULL && res == 0) {
-		res = find_and_get_referenced_message(module->mod_next.tq_next, refMsg, referencedStructName);
-		if (res == 0) {
-			fprintf(stderr, "find_and_get_referenced_message(): Constrained skeleton was NOT found..\n");
-		}
-		return res;
-	}
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (strcmp(tc->Identifier, referencedStructName) == 0) {
+                // then copy it over to the target one
+                memcpy(refMsg, tc, sizeof(*tc));
+                fprintf(stderr, "find_and_get_referenced_message(): Hooray! Constrained skeleton was found! It is %s\n",
+                        refMsg->Identifier);
+                res = 1;
+                return res;
+            }
+        }
+    }
 
 	return res;
 }
 
 static int
-process_referenced_class(const char *className, asn1p_expr_t *tree, int *unique, char *choicePart, asn1p_t *asn) {
+process_referenced_class(const char *className, int *unique, char *choicePart, asn1p_t *asn) {
 	int res = 0;
 
 	asn1p_module_t *mod;
@@ -1346,15 +1323,8 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			sprintf(msg->name, "%s%03d", expr->Identifier, expr->_type_unique_index);
 		}
 
-		struct asn1p_expr_s *asntree = NULL;
-		if (asn->modules.tq_head != NULL) {
-			if (asn->modules.tq_head->members.tq_head != NULL) {
-				asntree = asn->modules.tq_head->members.tq_head;
-			}
-		}
-
 		int extensibility = 0;
-		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
+		proto_process_children(expr, msg, expr->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, &extensibility, proto_module, asn);
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 		}
@@ -1376,15 +1346,8 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 														  "choice from %s:%d", mod->source_file_name, expr->_lineno);
 		proto_msg_add_oneof(msg, oneof);
 
-		struct asn1p_expr_s *asntree = NULL;
-		if (asn->modules.tq_head != NULL) {
-			if (asn->modules.tq_head->members.tq_head != NULL) {
-				asntree = asn->modules.tq_head->members.tq_head;
-			}
-		}
-
 		int extensibility = 0;
-		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
+		proto_process_children(expr, (proto_msg_t *) oneof, 0, 1, &extensibility, proto_module, asn);
 
 		if (extensibility) {
 			strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -1405,50 +1368,26 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 			free(param_comments);
 		}
 
-		struct asn1p_expr_s *asntree = NULL;
-		if (asn->modules.tq_head != NULL) {
-			if (asn->modules.tq_head->members.tq_head != NULL) {
-				asntree = asn->modules.tq_head->members.tq_head;
-			}
-		}
-
 		proto_msg_def_t *msgelem = proto_create_msg_elem("value", "int32", NULL);
 
 		if (expr->reference->comp_count >= 1) {
 			asn1p_expr_t *refElem;
 			refElem = WITH_MODULE_NAMESPACE(expr->module, expr_ns, asn1f_find_terminal_type_ex(asn, expr_ns, expr));
 			sprintf(msgelem->type, "%s%03d", refElem->Identifier, refElem->_type_unique_index);
-			if (asntree != NULL) {
-				// extract message first
-				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, asntree, asntree, mod, proto_module, flags, asn);
-				// now add this message to the message tree
-				if (res) {
-					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
-							refElem->Identifier, msgelem->type, refElem->meta_type, refElem->expr_type);
-				}
-			} else {
-				// extract message first and then
-				int res = 0;
-				res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, expr, expr, mod, proto_module, flags, asn);
-				// now add this message to the message tree
-				if (res) {
-					fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
-							refElem->Identifier, msgelem->type, refElem->meta_type, refElem->expr_type);
-				}
-			}
+
+            int res = 0;
+            res = proto_extract_referenced_message(refElem->Identifier, msgelem->type, proto_module, flags, asn);
+            // now add this message to the message tree
+            if (res) {
+                fprintf(stderr, "\n\n//////// ERROR Couldn't create message. Unhandled expr %s -> %s. Meta type: %d. Expr type: %d /////\n\n",
+                        refElem->Identifier, msgelem->type, refElem->meta_type, refElem->expr_type);
+            }
 		}
 
 		// checking if the structure is extensible
 		int isExtensible = 0;
 		int oneofDependent = 0;
-		if (asntree != NULL) {
-			// iterating over the whole tree
-			isExtensible = structure_is_extensible(asntree, expr->reference->components->name, &oneofDependent);
-		} else {
-			// backup option - iterating over what's left
-			isExtensible = structure_is_extensible(expr, expr->reference->components->name, &oneofDependent);
-		}
+        isExtensible = structure_is_extensible(asn, expr->reference->components->name, &oneofDependent);
 		if (isExtensible == 1 && oneofDependent == 0) {
 			msgelem->tags.valueExt = 1;
 		} else if (isExtensible == 1 && oneofDependent == 1) {
@@ -1508,42 +1447,40 @@ proto_process_enumerated(asn1p_expr_t *expr, proto_enum_t **protoenum) {
 
 // is_enum function verifies if the parsed structure is enumerator or not.
 static int
-is_enum(asn1p_expr_t *expr, const char *name, int *elCount) {
+is_enum(asn1p_t *asn, const char *name, int *elCount) {
 	asn1p_expr_t *se;
 	int enm = 0;
 	int elements = -1;
 
-	if (strcmp(expr->Identifier, name) == 0) {
-		if (expr->expr_type == ASN_BASIC_ENUMERATED) {
-			enm = 1;
-			if (TQ_FIRST(&expr->members)) {
-				TQ_FOR(se, &(expr->members), next)
-				{
-					if (se->expr_type == A1TC_EXTENSIBLE) {
-						break;
-					}
-					elements++;
-				}
-			}
-		}
-	} else {
-		if (expr->next.tq_next != NULL) {
-			struct asn1p_expr_s *next = expr->next.tq_next;
-			int isEnum = 0;
-			isEnum = is_enum(next, name, &elements);
-			*elCount = elements;
-			if (isEnum) {
-				return 1;
-			}
-		}
-	}
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (strcmp(tc->Identifier, name) == 0) {
+                if (tc->expr_type == ASN_BASIC_ENUMERATED) {
+                    enm = 1;
+                    if (TQ_FIRST(&tc->members)) {
+                        TQ_FOR(se, &(tc->members), next)
+                        {
+                            if (se->expr_type == A1TC_EXTENSIBLE) {
+                                break;
+                            }
+                            elements++;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 	*elCount = elements;
 	return enm;
 }
 
 static int
-proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, asn1p_expr_t *asntree, int *extensibility,
+proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, int oneof, int *extensibility,
 					   proto_module_t *proto_module, asn1p_t *asn) {
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
@@ -1942,13 +1879,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// checking if the structure is extensible
 				int isExtensible = 0;
 				int oneofDependent = 0;
-				if (asntree != NULL) {
-					// iterating over the whole tree
-					isExtensible = structure_is_extensible(asntree, se->reference->components->name, &oneofDependent);
-				} else {
-					// backup option - iterating over what's left
-					isExtensible = structure_is_extensible(expr, se->reference->components->name, &oneofDependent);
-				}
+                isExtensible = structure_is_extensible(asn, se->reference->components->name, &oneofDependent);
 				if (isExtensible == 1 && oneofDependent == 0) {
 					elem->tags.valueExt = 1;
 				} else if (isExtensible == 1 && oneofDependent == 1) {
@@ -1958,13 +1889,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// make sure that the type is enumerator
 				int enm = 0;
 				int elCount = -1;
-				if (asntree != NULL) {
-					// iterating over the whole tree
-					enm = is_enum(asntree, se->reference->components->name, &elCount);
-				} else {
-					// backup option - iterating over what's left
-					enm = is_enum(expr, se->reference->components->name, &elCount);
-				}
+                enm = is_enum(asn, se->reference->components->name, &elCount);
 				if (enm) {
 					if (elCount != -1) {
 						elem->tags.valueUB = elCount;
@@ -2007,7 +1932,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 							// find referenced type and process it as element
 							char constrainedType[PROTO_NAME_CHARS] = {};
 							int matched = 0;
-							find_and_process_referenced_type(refType, se->reference->module, elem, proto_module,
+							find_and_process_referenced_type(refType, asn, elem, proto_module,
 															 constrainedType, &matched);
 							if (matched > 0 && strlen(constrainedType) > 0) {
 								fprintf(stderr,
@@ -2022,7 +1947,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 							asn1p_expr_t *refMsg = malloc(sizeof(*se));
 							// We assume by default that the refMsg would be found, because we have referencedStructName
 							int found = 0;
-							found = find_and_get_referenced_message(se->reference->module, refMsg, referencedStructName);
+							found = find_and_get_referenced_message(asn, refMsg, referencedStructName);
 							if (found == 0) {
 								fprintf(stderr,
 										"proto_process_children() - line 1986: referenced message %s was not found in the tree\n",
@@ -2038,7 +1963,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 								int ret = 0;
 								if (strlen(constrainedType) > 0) {
 									asn1p_expr_t *constrainedSkeleton = malloc(sizeof(*se));
-									int result = find_and_get_referenced_message(se->reference->module, constrainedSkeleton,
+									int result = find_and_get_referenced_message(asn, constrainedSkeleton,
 																				 constrainedType);
 									fprintf(stderr, "proto_process_children() - line 2014: Constrained skeleton is %s\n",
 											constrainedSkeleton->Identifier);
@@ -2105,7 +2030,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				}
 
 				int extensibility = 0;
-				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, asntree, &extensibility, proto_module, asn);
+				proto_process_children(se, msg, se->expr_type == ASN_CONSTR_SEQUENCE_OF, 0, &extensibility, proto_module, asn);
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
 					elem->tags.valueExt = 1;
@@ -2141,7 +2066,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				proto_msg_add_oneof(msg, oneof);
 
 				int extensibility = 0;
-				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, asntree, &extensibility, proto_module, asn);
+				proto_process_children(se, (proto_msg_t *) oneof, 0, 1, &extensibility, proto_module, asn);
 
 				if (extensibility) {
 					strcat(msg->comments, "\n@inject_tag: aper:\"choiceExt\"");
@@ -2412,122 +2337,6 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 	return result;
 }
 
-// this function processes value set and creates a message (or set of messages per definition)
-static int
-asn1extract_columns(asn1p_expr_t *expr, proto_module_t *proto_module, char *mod_file) {
-	char comment[PROTO_COMMENTS_CHARS] = {};
-	char msgname[PROTO_NAME_CHARS] = {};
-
-	strcpy(comment, "concrete instance(s) of class ");
-	if (expr->reference != NULL && expr->reference->comp_count > 0) {
-		strcat(comment, expr->reference->components->name);
-	}
-	strcat(comment, " from \%s:\%d");
-	strcat(msgname, "_");
-	strcat(msgname, expr->Identifier);
-
-	proto_msg_t *new_proto_msg = proto_create_message(msgname, expr->spec_index, expr->_type_unique_index, comment,
-													  mod_file, expr->_lineno, 0);
-
-	int rowIdx = 0;
-	int colIdx = 0;
-	char instanceName[PROTO_NAME_CHARS] = {};
-	proto_msg_t *submsg = NULL;
-
-	// Iterating over the CHOICE options..
-	for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
-		asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
-		if (expr->ioc_table->rows > 1) {
-			sprintf(msgname, "%s%03d", expr->Identifier, rowIdx + 1);
-			submsg = proto_create_message(msgname, -1, 0, NULL, mod_file, expr->_lineno, 0);
-			proto_msg_add_nested(new_proto_msg, submsg);
-		}
-		// Iterating over the fields of class
-		for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
-			struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
-			char temptype[PROTO_TYPE_CHARS] = {};
-			char rules[PROTO_RULES_CHARS] = {};
-			if (colij.value) {
-				if (colij.value->value) {
-					const char *pval = asn1f_printable_value(colij.value->value);
-					switch (colij.value->value->type) {
-						case ATV_INTEGER:
-							if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
-								(long) (colij.value->value->value.v_integer) < -2147483647) {
-								strcpy(temptype, "int64");
-								snprintf(rules, PROTO_RULES_CHARS, "int64.const = %d",
-										 (int) (colij.value->value->value.v_integer));
-							} else {
-								strcpy(temptype, "int32");
-								snprintf(rules, PROTO_RULES_CHARS, "int32.const = %d",
-										 (int) (colij.value->value->value.v_integer));
-							}
-							break;
-						case ATV_STRING:
-						case ATV_UNPARSED:
-							strcpy(temptype, "string");
-							snprintf(rules, PROTO_RULES_CHARS, "string.const = '%s'", pval);
-							break;
-						case ATV_REFERENCED:
-							snprintf(temptype, PROTO_TYPE_CHARS, "%s", colij.value->Identifier);
-							break;
-						default:
-							fprintf(stderr, "Unhandled value type %d %s\n", colij.value->value->type, pval);
-							return -1;
-					}
-				} else if (strcmp(colij.value->Identifier, "INTEGER") == 0) {
-					strcpy(temptype, "int32");
-					if (colij.value->value != NULL) {
-						if ((long) (colij.value->value->value.v_integer) > 2147483647 ||
-							(long) (colij.value->value->value.v_integer) < -2147483647) {
-							strcpy(temptype, "int64");
-						}
-					}
-				} else if (strcmp(colij.value->Identifier, "REAL") == 0) {
-					strcpy(temptype, "float");
-				} else {
-					snprintf(temptype, PROTO_TYPE_CHARS, "%s", colij.value->Identifier);
-				}
-				char tempname[PROTO_NAME_CHARS] = {};
-				snprintf(tempname, PROTO_NAME_CHARS, "%s", colij.field->Identifier);
-				// there are currently defined only two class identifiers - ID and PROCEDURE CODE
-				for (int u = 0; u < USUAL_CLASS_IDENTIFIERS; u++) {
-					char classID[PROTO_TYPE_CHARS] = {};
-					strcpy(classID, usual_class_identifiers[u]);
-					if (strcmp(classID, colij.field->Identifier) == 0) {
-						sprintf(instanceName, "%s%s", expr->reference->components->name,
-								asn1f_printable_value(colij.value->value));
-						if (submsg) {
-							sprintf(submsg->name, "%s%s", expr->Identifier, asn1f_printable_value(colij.value->value));
-						}
-						break;
-					}
-				}
-
-				proto_msg_def_t *new_proto_msg_def = proto_create_msg_elem(tempname, temptype, rules);
-				if (submsg) {
-					proto_msg_add_elem(submsg, new_proto_msg_def);
-				} else {
-					proto_msg_add_elem(new_proto_msg, new_proto_msg_def);
-				}
-			}
-		}
-		if (submsg) {
-			proto_msg_def_t *nested_msg_def = proto_create_msg_elem("test", msgname, NULL);
-			if (strlen(instanceName) > 0) {
-				strcpy(nested_msg_def->name, instanceName);
-				sprintf(nested_msg_def->type, "%s", submsg->name);
-			} else {
-				sprintf(nested_msg_def->name, "instance%03d", rowIdx + 1);
-			}
-			proto_msg_add_elem(new_proto_msg, nested_msg_def);
-		}
-	}
-
-	proto_messages_add_msg(proto_module, new_proto_msg);
-	return 0;
-}
-
 // This function creates a message for a standalone message defined through the CLASS
 // role of constrainedSkeleton is following - it limits fields of the CLASS to be included to the messages,
 // i.e., some of the CLASS fields would not be included in the final message
@@ -2574,7 +2383,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 
 			char *refName = NULL;
-			refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
+			refName = find_referenced_message(expr->reference->components->name, table_row, asntree);
 
 			if (refName != NULL && strcmp(refName, "") != 0) {
 				// Found referenced message -> increasing counter
@@ -2589,7 +2398,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 				asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 
 				char *refName = NULL;
-				refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
+				refName = find_referenced_message(expr->reference->components->name, table_row, asntree);
 				proto_msg_def_t *elem = proto_create_msg_elem(refName, refName, NULL);
 				proto_msg_add_elem((proto_msg_t *) oneof, elem);
 			}
@@ -2599,7 +2408,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			} else {
 				proto_msg_t *msgEmpty = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
 															 "value set from %s:%d", expr->module->source_file_name, expr->_lineno, 0);
-				proto_msg_def_t *elem = proto_create_msg_elem("", "message Empty{}", NULL);
+				proto_msg_def_t *elem = proto_create_msg_elem("value", "google.protobuf.Empty", NULL);
 				proto_msg_add_elem(msgEmpty, elem);
 				proto_messages_add_msg(proto_module, msgEmpty);
 			}
@@ -2612,7 +2421,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 			// and name of the part which is treated as choice
 			char *choicePart = malloc(PROTO_COMMENTS_CHARS);
 			memset(choicePart, 0, PROTO_COMMENTS_CHARS);
-			int res = process_referenced_class(expr->reference->components->name, expr->module->members.tq_head, &unique, choicePart, asntree);
+			int res = process_referenced_class(expr->reference->components->name, &unique, choicePart, asntree);
 
 			if (res != 0) {
 				// now we should.. compose the message structure:
@@ -2626,7 +2435,19 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 					// choice part was found!
 					for (rowIdx = 0; rowIdx < (int) expr->ioc_table->rows; rowIdx++) {
 						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
-						colIdx = 0;
+						// get unique index name first, then process type and compose element
+                        char *elemName = malloc(PROTO_COMMENTS_CHARS);
+                        memset(elemName, 0, PROTO_COMMENTS_CHARS);
+                        colIdx = 0;
+                        for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+                            struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+                            if (colij.field->unique == 1) {
+                                strcpy(elemName, colij.value->Identifier);
+                                break;
+                            }
+                        }
+                        // process and compose element
+                        colIdx = 0;
 						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
 							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
 							if (strcmp(colij.field->Identifier, choicePart) == 0) {
@@ -2634,10 +2455,12 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								// colij.value->Identifier must be present, otherwise anonymous value set can't be defined
 								proto_msg_def_t *elem = proto_create_msg_elem(colij.value->Identifier,
 																			  colij.value->Identifier, NULL);
-
+                                if (strlen(elemName) > 0) {
+                                    strcpy(elem->name, elemName);
+                                }
 								// parsing extensibility here
 								int oneOfDependent = 0;
-								int isExtensible = structure_is_extensible(expr->module->members.tq_head,
+								int isExtensible = structure_is_extensible(asntree,
 																		   colij.value->Identifier,
 																		   &oneOfDependent);
 								if (isExtensible == 1 && oneOfDependent == 0) {
@@ -2648,7 +2471,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								// make sure that the type is enumerator
 								int enm = 0;
 								int elCount = -1;
-								enm = is_enum(expr->module->members.tq_head, colij.value->Identifier, &elCount);
+								enm = is_enum(asntree, colij.value->Identifier, &elCount);
 
 								if (enm) {
 									if (elCount != -1) {
@@ -2690,7 +2513,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 																			  colij.value->reference->components->name, NULL);
 								// parsing extensibility here
 								int oneOfDependent = 0;
-								int isExtensible = structure_is_extensible(expr->module->members.tq_head,
+								int isExtensible = structure_is_extensible(asntree,
 																		   colij.value->reference->components->name,
 																		   &oneOfDependent);
 								if (isExtensible == 1 && oneOfDependent == 0) {
@@ -2701,7 +2524,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 								// make sure that the type is enumerator
 								int enm = 0;
 								int elCount = -1;
-								enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
+								enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
 
 								if (enm) {
 									if (elCount != -1) {
@@ -2758,7 +2581,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						asn1p_ioc_row_t *table_row = expr->ioc_table->row[rowIdx];
 						colIdx = 0;
 						char *refName = NULL;
-						refName = find_referenced_message(expr->reference->components->name, expr->module->members.tq_head, table_row);
+						refName = find_referenced_message(expr->reference->components->name, table_row, asntree);
 
 						if (refName != NULL && strcmp(refName, "") != 0) {
 							// Found referenced message -> adding it as an element.
@@ -2782,7 +2605,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 										strcpy(elem->type, colij.value->reference->components->name);
 										// parsing extensibility here
 										int oneOfDependent = 0;
-										int isExtensible = structure_is_extensible(expr->module->members.tq_head, colij.value->reference->components->name,
+										int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
 																				   &oneOfDependent);
 										if (isExtensible == 1 && oneOfDependent == 0) {
 											elem->tags.valueExt = 1;
@@ -2792,7 +2615,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 										// make sure that the type is enumerator
 										int enm = 0;
 										int elCount = -1;
-										enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
+										enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
 
 										if (enm) {
 											if (elCount != -1) {
@@ -2917,7 +2740,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						strcpy(elem->type, colij.value->reference->components->name);
 						// parsing extensibility here
 						int oneOfDependent = 0;
-						int isExtensible = structure_is_extensible(expr->module->members.tq_head, colij.value->reference->components->name,
+						int isExtensible = structure_is_extensible(asntree, colij.value->reference->components->name,
 																   &oneOfDependent);
 						if (isExtensible == 1 && oneOfDependent == 0) {
 							elem->tags.valueExt = 1;
@@ -2927,7 +2750,7 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 						// make sure that the type is enumerator
 						int enm = 0;
 						int elCount = -1;
-						enm = is_enum(expr->module->members.tq_head, colij.value->reference->components->name, &elCount);
+						enm = is_enum(asntree, colij.value->reference->components->name, &elCount);
 
 						if (enm) {
 							if (elCount != -1) {
@@ -3177,90 +3000,56 @@ proto_value_print(const asn1p_value_t *val, enum asn1print_flags flags, long *bo
 
 // this function returns a name of the referenced message, which is defined through CLASS
 static char *
-find_referenced_message(char *class_name, asn1p_expr_t *expr, asn1p_ioc_row_t *referenced_fields) {
+find_referenced_message(char *class_name, asn1p_ioc_row_t *referenced_fields, asn1p_t *asn) {
 
 	char *msgname = malloc(PROTO_COMMENTS_CHARS);
 	memset(msgname, 0, PROTO_COMMENTS_CHARS);
 
-	if (expr->meta_type == AMT_VALUE && expr->expr_type == A1TC_REFERENCE) {
-		if (expr->reference != NULL) {
-			if (strcmp(expr->reference->components->name, class_name) == 0) {
-				// found message of the same class
-				if (expr->ioc_table->rows == 1) {
-					asn1p_ioc_row_t *table_row = expr->ioc_table->row[0];
+    asn1p_module_t *mod;
+    TQ_FOR(mod, &(asn->modules), mod_next)
+    {
+        asn1p_expr_t *tc;
+        TQ_FOR(tc, &(mod->members), next)
+        {
+            if (tc->meta_type == AMT_VALUE && tc->expr_type == A1TC_REFERENCE) {
+                if (tc->reference != NULL) {
+                    if (strcmp(tc->reference->components->name, class_name) == 0) {
+                        // found message of the same class
+                        if (tc->ioc_table->rows == 1) {
+                            asn1p_ioc_row_t *table_row = tc->ioc_table->row[0];
 
-					if (table_row->columns == referenced_fields->columns) {
-						int match = 0; // to store number of matched fields
-						int colIdx = 0;
-						for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
-							struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
-							struct asn1p_ioc_cell_s ref_colij = referenced_fields->column[colIdx];
+                            if (table_row->columns == referenced_fields->columns) {
+                                int match = 0; // to store number of matched fields
+                                int colIdx = 0;
+                                for (colIdx = 0; colIdx < (int) table_row->columns; colIdx++) {
+                                    struct asn1p_ioc_cell_s colij = table_row->column[colIdx];
+                                    struct asn1p_ioc_cell_s ref_colij = referenced_fields->column[colIdx];
 
-							if (strcmp(colij.field->Identifier, ref_colij.field->Identifier) == 0 &&
-									colij.field->meta_type == ref_colij.field->meta_type &&
-									colij.field->expr_type == ref_colij.field->expr_type) {
-								if (colij.value != NULL && ref_colij.value != NULL) {
-									if (strcmp(colij.value->Identifier, ref_colij.value->Identifier) == 0 &&
-										colij.value->meta_type == ref_colij.value->meta_type &&
-										colij.value->expr_type == ref_colij.value->expr_type) {
-										match++;
-									}
-								} else {
-									match++;
-								}
-							}
-						}
-						if (match == referenced_fields->columns) {
-							strcat(msgname, expr->Identifier);
-							return msgname;
-						} else {
-							if (expr->next.tq_next != NULL) {
-								struct asn1p_expr_s *next = expr->next.tq_next;
-								char *msgname1 = NULL;
-								msgname1 = find_referenced_message(class_name, next, referenced_fields);
-								return msgname1;
-							}
-						}
-					} else {
-						if (expr->next.tq_next != NULL) {
-							struct asn1p_expr_s *next = expr->next.tq_next;
-							char *msgname1 = NULL;
-							msgname1 = find_referenced_message(class_name, next, referenced_fields);
-							return msgname1;
-						}
-					}
-				} else {
-					if (expr->next.tq_next != NULL) {
-						struct asn1p_expr_s *next = expr->next.tq_next;
-						char *msgname1 = NULL;
-						msgname1 = find_referenced_message(class_name, next, referenced_fields);
-						return msgname1;
-					}
-				}
-			} else {
-				if (expr->next.tq_next != NULL) {
-					struct asn1p_expr_s *next = expr->next.tq_next;
-					char *msgname1 = NULL;
-					msgname1 = find_referenced_message(class_name, next, referenced_fields);
-					return msgname1;
-				}
-			}
-		} else {
-			if (expr->next.tq_next != NULL) {
-				struct asn1p_expr_s *next = expr->next.tq_next;
-				char *msgname1 = NULL;
-				msgname1 = find_referenced_message(class_name, next, referenced_fields);
-				return msgname1;
-			}
-		}
-	} else {
-		if (expr->next.tq_next != NULL) {
-			struct asn1p_expr_s *next = expr->next.tq_next;
-			char *msgname1 = NULL;
-			msgname1 = find_referenced_message(class_name, next, referenced_fields);
-			return msgname1;
-		}
-	}
+                                    if (strcmp(colij.field->Identifier, ref_colij.field->Identifier) == 0 &&
+                                        colij.field->meta_type == ref_colij.field->meta_type &&
+                                        colij.field->expr_type == ref_colij.field->expr_type) {
+                                        if (colij.value != NULL && ref_colij.value != NULL) {
+                                            if (strcmp(colij.value->Identifier, ref_colij.value->Identifier) == 0 &&
+                                                colij.value->meta_type == ref_colij.value->meta_type &&
+                                                colij.value->expr_type == ref_colij.value->expr_type) {
+                                                match++;
+                                            }
+                                        } else {
+                                            match++;
+                                        }
+                                    }
+                                }
+                                if (match == referenced_fields->columns) {
+                                    strcat(msgname, tc->Identifier);
+                                    return msgname;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 
 	return msgname;

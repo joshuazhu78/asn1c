@@ -315,18 +315,13 @@ print_entries(proto_msg_def_t **entry, size_t entries,
 		char *typePc;
 		if (strstr(PROTOSCALARTYPES, proto_msg_def->type) != NULL ||
 			strcmp("asn1.v1.BitString", proto_msg_def->type) == 0 ||
-			strcmp("message Empty{}", proto_msg_def->type) == 0 ||
             strcmp("google.protobuf.Empty", proto_msg_def->type) == 0) {
 			typePc = strdup(proto_msg_def->type);
 		} else {
 			typePc = toPascalCaseDup(proto_msg_def->type);
 		}
 		char *nameLsc = toSnakeCaseDup(proto_msg_def->name, SNAKECASE_LOWER);
-		if (strcmp("message Empty{}", proto_msg_def->type) != 0) {
-			safe_printf("%s %s = %d", typePc, nameLsc, i + 1);
-		} else {
-			safe_printf("message Empty{}");
-		}
+		safe_printf("%s %s = %d", typePc, nameLsc, i + 1);
 		free(typePc);
 		free(nameLsc);
 		if (strcmp("message Empty{}", proto_msg_def->type) != 0) {

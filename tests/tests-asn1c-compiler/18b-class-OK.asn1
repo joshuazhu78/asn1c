@@ -13,7 +13,8 @@ BEGIN
 
     Functions FUNCTION ::= {
         {CODE id-valueSet1,    ARGUMENT Type1,  PRESENCE mandatory,  CRITICALITY high} |
-        {CODE id-valueSet2,    ARGUMENT Type2,  PRESENCE optional,   CRITICALITY low}
+        {CODE id-valueSet2,    ARGUMENT Type2,  PRESENCE optional,   CRITICALITY low} |
+        {CODE id-operator1,    ARGUMENT Type1,  PRESENCE optional,   CRITICALITY low}
     }
 
 	operator1 FUNCTION ::= {
