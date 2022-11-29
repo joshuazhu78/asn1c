@@ -9,6 +9,7 @@ option go_package = "pkg58a_param_ok/v1/moduletestparam;moduletestparam";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 58a-param-OK.asn1:15
 // Param INTEGER:maxSize

@@ -10,6 +10,7 @@ option go_package = "pkg14a_resolver_ok/v1/moduletestresolver2;moduletestresolve
 import "pkg14a_resolver_ok/v1/moduletestresolver3.proto";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // reference from 14a-resolver-OK.asn1:18
 // {alpha}
@@ -60,6 +61,7 @@ option go_package = "pkg14a_resolver_ok/v1/moduletestresolver3;moduletestresolve
 import "pkg14a_resolver_ok/v1/hiddenmodule.proto";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // enumerated from 14a-resolver-OK.asn1:48
 enum Enumeration {
@@ -94,6 +96,7 @@ option go_package = "pkg14a_resolver_ok/v1/hiddenmodule;hiddenmodule";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // enumerated from 14a-resolver-OK.asn1:59
 enum HiddenEnum {

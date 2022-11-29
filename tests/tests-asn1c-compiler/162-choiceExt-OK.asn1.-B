@@ -9,6 +9,7 @@ option go_package = "pkg162_choice_ext_ok/v1/moduletestconstraints1;moduletestco
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 162-choiceExt-OK.asn1:15
 // @inject_tag: aper:"valueExt"

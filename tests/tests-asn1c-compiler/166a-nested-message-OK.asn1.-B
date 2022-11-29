@@ -1,0 +1,94 @@
+////////////////////// moduletestclass.proto //////////////////////
+// Protobuf generated from /166a-nested-message-OK.asn1 by asn1c-0.9.29
+// ModuleTestClass { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 166 }
+
+syntax = "proto3";
+
+package pkg166a_nested_message_ok.v1;
+option go_package = "pkg166a_nested_message_ok/v1/moduletestclass;moduletestclass";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
+
+// enumerated from 166a-nested-message-OK.asn1:18
+enum TypeOfErrorNestedSomeList {
+    TYPE_OF_ERROR_NESTED_SOME_LIST_FATAL = 0;
+};
+
+// enumerated from 166a-nested-message-OK.asn1:51
+enum Criticality {
+    CRITICALITY_HIGH = 0;
+    CRITICALITY_LOW = 1;
+};
+
+// enumerated from 166a-nested-message-OK.asn1:57
+enum Presence {
+    PRESENCE_OPTIONAL = 0;
+    PRESENCE_MANDATORY = 1;
+};
+
+// value set from 166a-nested-message-OK.asn1:23
+// {SomeList-ExtIEs}
+message SomeListExtIes {
+    message Empty{};
+};
+
+// sequence from 166a-nested-message-OK.asn1:16
+// @inject_tag: aper:"valueExt"
+// {NestedSomeList}
+message NestedSomeList {
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:1,"
+    Criticality i_ecriticality = 1 [ json_name="iECriticality"];
+    CodeId i_e_id = 2 [ json_name="iE-ID"];
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:0,"
+    TypeOfErrorNestedSomeList type_of_error = 3 [ json_name="typeOfError"];
+    // @inject_tag: aper:"optional,sizeLB:0,sizeUB:16,"
+    repeated SomeListExtIes i_e_extensions = 4 [ json_name="iE-Extensions"];
+};
+
+// sequence from 166a-nested-message-OK.asn1:21
+// {SomeList}
+message SomeList {
+    // @inject_tag: aper:"valueExt,sizeLB:1,sizeUB:20,"
+    repeated NestedSomeList value = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 20}, json_name="value"];
+};
+
+// sequence from 166a-nested-message-OK.asn1:40
+// Param IE-DEFINITION:IEsSetParam
+// {Response-Container001}
+message ResponseContainer001 {
+    // @inject_tag: aper:"sizeLB:0,sizeUB:16,"
+    repeated SomeListExtIes value = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 16}, json_name="value"];
+};
+
+// sequence from 166a-nested-message-OK.asn1:43
+// Param IE-DEFINITION:IEsSetParam
+// {IE-Field001}
+message IeField001 {
+    SomeListExtIes id = 1 [ json_name="id"];
+    SomeListExtIes criticality = 2 [ json_name="criticality"];
+    SomeListExtIes value = 3 [ json_name="value"];
+};
+
+// range of Integer from 166a-nested-message-OK.asn1:48
+// {CodeID}
+message CodeId {
+    // @inject_tag: aper:"valueExt,valueLB:0,valueUB:128,"
+    int32 value = 1 [(validate.v1.rules).int32 = {gte: 0, lte: 128}, json_name="value"];
+};
+
+// reference from 166a-nested-message-OK.asn1:62
+// {id-operator1}
+message Idoperator1 {
+    // @inject_tag: aper:"valueLB:1,valueUB:1,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 1, json_name="value"]; // CodeID
+};
+
+// reference from 166a-nested-message-OK.asn1:63
+// {id-operator2}
+message Idoperator2 {
+    // @inject_tag: aper:"valueLB:2,valueUB:2,"
+    int32 value = 1 [(validate.v1.rules).int32.const = 2, json_name="value"]; // CodeID
+};
+

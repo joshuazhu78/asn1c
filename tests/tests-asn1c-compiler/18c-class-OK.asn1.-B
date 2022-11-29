@@ -9,6 +9,7 @@ option go_package = "pkg18c_class_ok/v1/moduletestclass;moduletestclass";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // enumerated from 18c-class-OK.asn1:74
 enum Criticality {

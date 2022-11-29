@@ -9,6 +9,7 @@ option go_package = "pkg39_sequence_of_ok/v1/modulenestedsequenceof;modulenested
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 39-sequence-of-OK.asn1:15
 // {T}

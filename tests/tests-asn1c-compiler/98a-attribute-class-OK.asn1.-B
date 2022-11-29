@@ -9,6 +9,7 @@ option go_package = "pkg98a_attribute_class_ok/v1/moduleattributeclass;moduleatt
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 98a-attribute-class-OK.asn1:21
 // {Attribute}

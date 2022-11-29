@@ -9,6 +9,7 @@ option go_package = "pkg164_pseudo_self_reference_ok/v1/modulelapstorage;modulel
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 164-pseudo-self-reference-OK.asn1:17
 // @inject_tag: aper:"valueExt"

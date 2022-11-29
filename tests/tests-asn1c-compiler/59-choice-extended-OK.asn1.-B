@@ -9,6 +9,7 @@ option go_package = "pkg59_choice_extended_ok/v1/moduletestextensiblechoice;modu
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 59-choice-extended-OK.asn1:15
 // @inject_tag: aper:"choiceExt"

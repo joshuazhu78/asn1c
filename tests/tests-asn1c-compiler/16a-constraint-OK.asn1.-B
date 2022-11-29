@@ -10,6 +10,7 @@ option go_package = "pkg16a_constraint_ok/v1/moduletestconstraint1;moduletestcon
 import "pkg16a_constraint_ok/v1/moduletestconstraint2.proto";
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // range of Integer from 16a-constraint-OK.asn1:17
 // {Type0}
@@ -47,6 +48,7 @@ option go_package = "pkg16a_constraint_ok/v1/moduletestconstraint2;moduletestcon
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // range of Integer from 16a-constraint-OK.asn1:39
 // {Type1}

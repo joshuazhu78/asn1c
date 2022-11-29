@@ -10,6 +10,7 @@ option go_package = "pkg13a_resolver_ok/v1/moduletestresolver1;moduletestresolve
 import "pkg13a_resolver_ok/v1/moduletestresolver2.proto"; // { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 13 2 }
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // reference from 13a-resolver-OK.asn1:20
 // {alpha}
@@ -51,6 +52,7 @@ option go_package = "pkg13a_resolver_ok/v1/moduletestresolver2;moduletestresolve
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // reference from 13a-resolver-OK.asn1:41
 // {beta}

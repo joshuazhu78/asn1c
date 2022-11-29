@@ -9,6 +9,7 @@ option go_package = "pkg166_nested_message_ok/v1/moduletestconstraints1;modulete
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // enumerated from 166-nested-message-OK.asn1:16
 enum Ense1 {

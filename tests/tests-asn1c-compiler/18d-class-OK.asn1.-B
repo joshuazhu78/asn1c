@@ -9,6 +9,7 @@ option go_package = "pkg18d_class_ok/v1/moduletestclass;moduletestclass";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // enumerated from 18d-class-OK.asn1:56
 enum Criticality {
@@ -39,6 +40,7 @@ message ResponseIEsValue {
 };
 
 // concrete instance(s) of class IE-DEFINITION from 18d-class-OK.asn1:22
+// @inject_tag: aper:"valueExt"
 // {Response-IEs}
 message ResponseIEs {
     // @inject_tag: aper:"unique,"
@@ -61,8 +63,8 @@ message Response {
 // Param IE-DEFINITION:IEsSetParam
 // {Response-Container001}
 message ResponseContainer001 {
-    // @inject_tag: aper:""
-    repeated ResponseIEs value = 1 [ json_name="value"];
+    // @inject_tag: aper:"sizeLB:0,sizeUB:16,"
+    repeated ResponseIEs value = 1 [(validate.v1.rules).repeated = {min_items: 0, max_items: 16}, json_name="value"];
 };
 
 // sequence from 18d-class-OK.asn1:48

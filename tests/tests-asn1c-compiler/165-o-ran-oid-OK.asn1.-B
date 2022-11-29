@@ -9,6 +9,7 @@ option go_package = "pkg165_o_ran_oid_ok/v3/e2sm-smth-ies;e2smsmthiesv3";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // sequence from 165-o-ran-oid-OK.asn1:14
 // @inject_tag: aper:"valueExt"

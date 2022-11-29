@@ -9,6 +9,7 @@ option go_package = "pkg10_int_ok/v1/moduletestint4;moduletestint4";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // constant Integer from 10-int-OK.asn1:14
 // {-}

@@ -9,6 +9,7 @@ option go_package = "pkg161_size_ext_ok/v1/moduletestconstraints1;moduletestcons
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // range of Integer from 161-sizeExt-OK.asn1:14
 // {ConstrainedBitString}

@@ -1,0 +1,36 @@
+////////////////////// moduletestclass.proto //////////////////////
+// Protobuf generated from /167-empty-message-OK.asn1 by asn1c-0.9.29
+// ModuleTestClass { iso org(3) dod(6) internet(1) private(4) enterprise(1) spelio(9363) software(1) asn1c(5) test(1) 167 }
+
+syntax = "proto3";
+
+package pkg167_empty_message_ok.v1;
+option go_package = "pkg167_empty_message_ok/v1/moduletestclass;moduletestclass";
+
+import "validate/v1/validate.proto";
+import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
+
+// sequence from 167-empty-message-OK.asn1:16
+// @inject_tag: aper:"valueExt"
+// {NestedSomeList}
+message NestedSomeList {
+    int32 int = 1 [ json_name="int"];
+    // @inject_tag: aper:"optional,valueExt,"
+    optional SomeListExtIes some_extensions = 2 [ json_name="some-Extensions"];
+};
+
+// sequence from 167-empty-message-OK.asn1:19
+// {SomeList}
+message SomeList {
+    // @inject_tag: aper:"valueExt,sizeLB:1,sizeUB:20,"
+    repeated NestedSomeList value = 1 [(validate.v1.rules).repeated = {min_items: 1, max_items: 20}, json_name="value"];
+};
+
+// sequence from 167-empty-message-OK.asn1:23
+// @inject_tag: aper:"valueExt"
+// {SomeList-ExtIEs}
+message SomeListExtIes {
+    google.protobuf.Empty value = 1 [ json_name="value"];
+};
+

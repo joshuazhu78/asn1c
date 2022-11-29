@@ -314,22 +314,30 @@ print_entries(proto_msg_def_t **entry, size_t entries,
 		}
 		char *typePc;
 		if (strstr(PROTOSCALARTYPES, proto_msg_def->type) != NULL ||
-			strcmp("asn1.v1.BitString", proto_msg_def->type) == 0) {
+			strcmp("asn1.v1.BitString", proto_msg_def->type) == 0 ||
+			strcmp("message Empty{}", proto_msg_def->type) == 0 ||
+            strcmp("google.protobuf.Empty", proto_msg_def->type) == 0) {
 			typePc = strdup(proto_msg_def->type);
 		} else {
 			typePc = toPascalCaseDup(proto_msg_def->type);
 		}
 		char *nameLsc = toSnakeCaseDup(proto_msg_def->name, SNAKECASE_LOWER);
-		safe_printf("%s %s = %d", typePc, nameLsc, i + 1);
+		if (strcmp("message Empty{}", proto_msg_def->type) != 0) {
+			safe_printf("%s %s = %d", typePc, nameLsc, i + 1);
+		} else {
+			safe_printf("message Empty{}");
+		}
 		free(typePc);
 		free(nameLsc);
-		if (strlen(proto_msg_def->rules) > 0) {
-			safe_printf(" [(validate.v1.rules).%s,", proto_msg_def->rules);
-		} else {
-			safe_printf(" [");
+		if (strcmp("message Empty{}", proto_msg_def->type) != 0) {
+			if (strlen(proto_msg_def->rules) > 0) {
+				safe_printf(" [(validate.v1.rules).%s,", proto_msg_def->rules);
+			} else {
+				safe_printf(" [");
+			}
+			safe_printf(" json_name=\"%s", proto_msg_def->name);
+			safe_printf("\"]");
 		}
-		safe_printf(" json_name=\"%s", proto_msg_def->name);
-		safe_printf("\"]");
 		if (strlen(proto_msg_def->comments) > 0) {
 			safe_printf("; // %s\n", proto_msg_def->comments);
 		} else {
@@ -562,7 +570,8 @@ void proto_print_msg(proto_module_t *proto_module, enum asn1print_flags2 flags, 
 
 	// static imports, should be always present
 	safe_printf("import \"validate/v1/validate.proto\";\n");
-	safe_printf("import \"asn1/v1/asn1.proto\";\n\n");
+	safe_printf("import \"asn1/v1/asn1.proto\";\n");
+    safe_printf("import \"google/protobuf/empty.proto\";\n\n"); // statically including an import for empty messages
 
 	for (int i = 0; i < (int) (proto_module->enums); i++) {
 		proto_enum_t *proto_enum = proto_module->protoenum[i];

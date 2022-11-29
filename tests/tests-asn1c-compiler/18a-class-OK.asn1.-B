@@ -9,6 +9,7 @@ option go_package = "pkg18a_class_ok/v1/moduletestclass;moduletestclass";
 
 import "validate/v1/validate.proto";
 import "asn1/v1/asn1.proto";
+import "google/protobuf/empty.proto";
 
 // value set from 18a-class-OK.asn1:15
 // {Functions}

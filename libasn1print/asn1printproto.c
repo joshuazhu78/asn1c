@@ -1001,7 +1001,7 @@ asn1print_expr_proto(asn1p_t *asn, asn1p_module_t *mod, asn1p_expr_t *expr,
 		// A dummy placeholder to avoid coverage errors
 	}
 
-	fprintf(stderr, "asn1print_expr_proto(): Processing structure %s\n", expr->Identifier);
+	fprintf(stderr, "-------------------> asn1print_expr_proto(): Processing structure %s\n", expr->Identifier);
 	// If there are specializations (driven by parameters, define these as proto messages)
 	if (expr->specializations.pspecs_count > 0) {
 		int i;
@@ -1548,6 +1548,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 	asn1p_expr_t *se;
 	// se2 carries information about the type of the item (could be useful to parse constraints, such as valueExt for SEQUENCEs)
 	asn1p_expr_t *se2;
+	int children = 0;
 
 	if (TQ_FIRST(&expr->members)) {
 		int extensible = 0;
@@ -1555,8 +1556,32 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 //			dont_involve_children = 1;
 		TQ_FOR(se, &(expr->members), next)
 		{
+			children++;
 			proto_msg_def_t *elem = proto_create_msg_elem(se->Identifier, "int32", NULL);
 			elem->tags.repeated = repeated;
+
+			// parsing constraints for SEQUENCE OF...
+			if (repeated) {
+				if (expr->constraints != NULL) {
+					long lowerbound = -1;
+					long upperbound = -1;
+					int extensibility = 0;
+					char *constraint = proto_constraint_print(expr->constraints, APF_REPEATED_VALUE, &lowerbound,
+															  &upperbound, &extensibility);
+					if (extensibility) {
+						elem->tags.sizeExt = 1;
+					}
+					if (lowerbound != -1) {
+						elem->tags.sizeLB = lowerbound;
+					}
+					if (upperbound != -1) {
+						elem->tags.sizeUB = upperbound;
+					}
+					sprintf(elem->rules, "repeated = {%s}", constraint);
+					free(constraint);
+				}
+			}
+
 			elem->marker = se->marker.flags;
 			// checking if the structure is optional and adding a tag if it is
 			if (elem->marker == EM_OPTIONAL) {
@@ -1614,11 +1639,17 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// treating the case of anonymous nested enumerator
 				// creating the (enumerator) message first
 				// since it is nested enum, name would be message specific
-				char *enum_name = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+				// ToDo - implement workaround for empty identifier in expr
+				char *enum_name = malloc(PROTO_NAME_CHARS + 1); // +1 for the null-terminator
 				// in real code you would check for errors in malloc here
 				strcpy(enum_name, se->Identifier);
-				strcat(enum_name, expr->Identifier);
-
+				if (expr->Identifier != NULL) {
+					strcat(enum_name, expr->Identifier);
+				} else if (strlen(msgdef->name) > 0) {
+					strcat(enum_name, msgdef->name);
+				} else {
+					strcat(enum_name, "Nested");
+				}
 				// also excluding all dashes from the name
 				int j = 0;
 //				char *correct_enum_name = malloc(strlen(enum_name) + 1);
@@ -1814,8 +1845,13 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 					char *msgName = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
 					// in real code you would check for errors in malloc here
 					strcpy(msgName, se->Identifier);
-					strcat(msgName, expr->Identifier);
-
+					if (expr->Identifier != NULL) {
+						strcat(msgName, expr->Identifier);
+					} else if (strlen(msgdef->name) > 0) {
+						strcat(msgName, msgdef->name);
+					} else {
+						strcat(msgName, "Nested");
+					}
 					proto_msg_t *msg = proto_create_message(msgName, se->spec_index, se->_type_unique_index,
 															"repeated from %s:%d", se->module->source_file_name, se->_lineno, 0);
 					proto_msg_def_t *elem1 = proto_create_msg_elem(se->Identifier, msgName, NULL);
@@ -1939,7 +1975,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// checking whether item refers to the other structure
 				if (se->rhs_pspecs != NULL) {
 					asn1p_expr_t *innerSe;
-					char *referencedStructName;
+					char *referencedStructName = NULL;
 					if (TQ_FIRST(&se->rhs_pspecs->members)) {
 						TQ_FOR(innerSe, &(se->rhs_pspecs->members), next)
 						{
@@ -2000,7 +2036,7 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 										se->Identifier, expr->Identifier, refMsg->Identifier);
 								// ToDo - check if referenced message was already created.. If not, then create it..
 								int ret = 0;
-								if (constrainedType != NULL && strlen(constrainedType) > 0) {
+								if (strlen(constrainedType) > 0) {
 									asn1p_expr_t *constrainedSkeleton = malloc(sizeof(*se));
 									int result = find_and_get_referenced_message(se->reference->module, constrainedSkeleton,
 																				 constrainedType);
@@ -2040,10 +2076,19 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 
 			} else if (se->expr_type == ASN_CONSTR_SEQUENCE && se->meta_type == AMT_TYPE) {
 				// treating the case of nested SEQUENCE
-				char *msgName = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
-				// in real code you would check for errors in malloc here
-				strcpy(msgName, se->Identifier);
-				strcat(msgName, expr->Identifier);
+				char *msgName = malloc(PROTO_NAME_CHARS + 1);
+				if (se->Identifier != NULL) {
+//					*msgName = malloc(
+//							strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+					// in real code you would check for errors in malloc here
+					strcpy(msgName, se->Identifier);
+					strcat(msgName, expr->Identifier);
+				} else {
+//					*msgName = malloc(
+//							strlen("Nested") + strlen(expr->Identifier) + 1);
+					strcpy(msgName, "Nested");
+					strcat(msgName, expr->Identifier);
+				}
 
 				proto_msg_t *msg = proto_create_message(msgName, se->spec_index, se->_type_unique_index,
 														"sequence from %s:%d", se->module->source_file_name, se->_lineno, 0);
@@ -2069,11 +2114,16 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				proto_messages_add_msg(proto_module, msg);
 			} else if (se->expr_type == ASN_CONSTR_CHOICE) {
 				// treating the case of nested CHOICE
-				char *msgNameOneOf = malloc(strlen(se->Identifier) + strlen(expr->Identifier) + 1); // +1 for the null-terminator
+				char *msgNameOneOf = malloc(PROTO_NAME_CHARS + 1); // +1 for the null-terminator
 				// in real code you would check for errors in malloc here
 				strcpy(msgNameOneOf, se->Identifier);
-				strcat(msgNameOneOf, expr->Identifier);
-
+				if (expr->Identifier != NULL) {
+					strcat(msgNameOneOf, expr->Identifier);
+				} else if (strlen(msgdef->name) > 0) {
+					strcat(msgNameOneOf, msgdef->name);
+				} else {
+					strcat(msgNameOneOf, "Nested");
+				}
 				proto_msg_t *msg = proto_create_message(msgNameOneOf, se->spec_index, se->_type_unique_index,
 														"choice from %s:%d", se->module->source_file_name, se->_lineno, 0);
 				if (se->lhs_params != NULL) {
@@ -2107,6 +2157,11 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 			if (se->expr_type == A1TC_EXTENSIBLE) {
 				extensible = 1;
 				*extensibility = 1;
+				if (children == 1 && se->next.tq_next == NULL) {
+                    // this is an empty message
+					proto_msg_def_t *elem1 = proto_create_msg_elem("value", "google.protobuf.Empty", NULL);
+					proto_msg_add_elem(msgdef, elem1);
+				}
 				continue;
 			} else if (se->expr_type == A1TC_REFERENCE) {
 			} else if (se->Identifier) {
@@ -2497,6 +2552,11 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 	proto_msg_t *msg = proto_create_message(msgname, expr->spec_index, expr->_type_unique_index, comment,
 											expr->module->source_file_name, expr->_lineno, 0);
 
+    // parsing extensibility
+    if (expr->ioc_table->extensible == 1) {
+        strcat(msg->comments, "\n@inject_tag: aper:\"valueExt\"");
+    }
+
 	// In case we are processing VALUE SET, firstly, search if any other message has
 	// the same signature and then reference it. Otherwise, process it as anonymous VALUE SET (the one which
 	// has nested definition, same as nested SEQUENCE or nested ENUMERATED)
@@ -2533,8 +2593,16 @@ process_class_referenced_message(asn1p_expr_t *expr, proto_module_t *proto_modul
 				proto_msg_def_t *elem = proto_create_msg_elem(refName, refName, NULL);
 				proto_msg_add_elem((proto_msg_t *) oneof, elem);
 			}
-			proto_msg_add_oneof(msgOneOf, oneof);
-			proto_messages_add_msg(proto_module, msgOneOf);
+			if ((int) expr->ioc_table->rows > 0) {
+				proto_msg_add_oneof(msgOneOf, oneof);
+				proto_messages_add_msg(proto_module, msgOneOf);
+			} else {
+				proto_msg_t *msgEmpty = proto_create_message(expr->Identifier, expr->spec_index, expr->_type_unique_index,
+															 "value set from %s:%d", expr->module->source_file_name, expr->_lineno, 0);
+				proto_msg_def_t *elem = proto_create_msg_elem("", "message Empty{}", NULL);
+				proto_msg_add_elem(msgEmpty, elem);
+				proto_messages_add_msg(proto_module, msgEmpty);
+			}
 		} else {
 			// compose a message as a value set with one item treated as a (canonical) choice
 			int unique = 0;
