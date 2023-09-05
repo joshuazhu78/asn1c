@@ -2135,6 +2135,16 @@ proto_constraint_print(const asn1p_constraint_t *ct, enum asn1print_flags2 flags
 				strcat(result, val);
 				free(val);
 				break;
+			} else if (flags & APF_REPEATED_VALUE) {
+				strcat(result, "min_items: ");
+				val = proto_value_print(ct->value, (enum asn1print_flags) flags, lowerbound);
+				strcat(result, val);
+				free(val);
+				strcat(result, ", max_items: ");
+				val = proto_value_print(ct->value, (enum asn1print_flags) flags, upperbound);
+				strcat(result, val);
+				free(val);
+				break;
 			}
 			val = proto_value_print(ct->value, (enum asn1print_flags) flags, lowerbound);
 			*upperbound = *lowerbound;
