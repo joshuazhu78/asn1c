@@ -25,8 +25,11 @@
 #include <asn1p_integer.h>
 #include <asn1print.h>
 
-#include "asn1printproto.h"
+#include <asn1printproto.h>
 #include "asn1prototypes.h"
+
+// Helper macro to safely get Identifier or return a default value
+#define SAFE_IDENTIFIER(expr, default_val) ((expr) && (expr)->Identifier ? (expr)->Identifier : (default_val))
 
 static abuf all_output_;
 
@@ -111,6 +114,11 @@ static char
 
 static proto_param_kind_e
 proto_param_type(struct asn1p_param_s *param) {
+	// Check for NULL pointer before accessing components
+	if (!param->governor || !param->governor->components) {
+		return PROTO_PARAM_TYPE;
+	}
+
 	char *governer = param->governor->components->name;
 	char *arg = param->argument;
 
@@ -191,7 +199,10 @@ proto_extract_params(proto_msg_t *msg, asn1p_expr_t *expr) {
 
 		proto_msg_add_param(msg, pp);
 
-		sprintf(temp, "\nParam %s:%s", param->governor->components->name, param->argument);
+		// Check for NULL pointer before accessing components
+		const char *governer_name = (param->governor && param->governor->components)
+			? param->governor->components->name : "Unknown";
+		sprintf(temp, "\nParam %s:%s", governer_name, param->argument);
 		strncat(params_comments, temp, PROTO_COMMENTS_CHARS - strlen(params_comments));
 	}
 
@@ -1576,10 +1587,16 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// treating the case of anonymous nested enumerator
 				// creating the (enumerator) message first
 				// since it is nested enum, name would be message specific
-				// ToDo - implement workaround for empty identifier in expr
 				char *enum_name = malloc(PROTO_NAME_CHARS + 1); // +1 for the null-terminator
 				// in real code you would check for errors in malloc here
-				strcpy(enum_name, se->Identifier);
+
+				// Fix: Check for NULL Identifier before using strcpy
+				if (se->Identifier != NULL) {
+					strcpy(enum_name, se->Identifier);
+				} else {
+					strcpy(enum_name, "AnonymousEnum");
+				}
+
 				if (expr->Identifier != NULL) {
 					strcat(enum_name, expr->Identifier);
 				} else if (strlen(msgdef->name) > 0) {
@@ -2041,7 +2058,14 @@ proto_process_children(asn1p_expr_t *expr, proto_msg_t *msgdef, int repeated, in
 				// treating the case of nested CHOICE
 				char *msgNameOneOf = malloc(PROTO_NAME_CHARS + 1); // +1 for the null-terminator
 				// in real code you would check for errors in malloc here
-				strcpy(msgNameOneOf, se->Identifier);
+
+				// Check for NULL Identifier before using strcpy
+				if (se->Identifier != NULL) {
+					strcpy(msgNameOneOf, se->Identifier);
+				} else {
+					strcpy(msgNameOneOf, "AnonymousChoice");
+				}
+
 				if (expr->Identifier != NULL) {
 					strcat(msgNameOneOf, expr->Identifier);
 				} else if (strlen(msgdef->name) > 0) {

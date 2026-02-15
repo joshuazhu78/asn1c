@@ -1074,6 +1074,11 @@ AlternativeTypeLists:
 		$$ = $1;
 		asn1p_expr_add($$, $3);
 	}
+	| AlternativeTypeLists ',' TOK_VBracketLeft AlternativeTypeLists TOK_VBracketRight {
+		$$ = $1;
+		asn1p_expr_add_many($$, $4);
+		asn1p_expr_free($4);
+	}
 	;
 
 AlternativeType:
